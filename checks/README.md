@@ -61,7 +61,7 @@ Phát hiện biến môi trường giống secret là heuristic theo tên. Với
 | :--- | :--- |
 | macOS, Python 3.9, ngoài sandbox và trong `sandbox-exec` với profile chặn và profile lỏng | Đã thử: kết quả đổi đúng theo profile |
 | Linux (bubblewrap, `srt`, Landlock) | Chưa thử |
-| Container Linux (phần ISO-04) | Chưa thử trên máy thật |
+| Container Linux trên Docker Desktop 29.6 (Debian bookworm) | Đã thử ba cấu hình: `examples/devcontainer` (mọi dòng đạt), container mặc định (bắt được no-new-privileges chưa bật), `--privileged` với bind-mount home (bắt được bounding set có CAP_SYS_ADMIN, seccomp tắt, ghi được vào home) |
 | Windows, WSL2, Windows Sandbox | Chưa thử |
 
 Nếu bạn chạy script trên một nền tảng chưa thử, hoặc thấy một phép thử cho kết quả sai (báo *Đạt* khi thật ra đường vẫn hở, hoặc ngược lại), mở Issue theo mẫu "Góp ý nội dung guideline", chọn loại "Phép kiểm chứng không đạt dù đã làm đúng hướng dẫn", và dán kết quả `--json` (xem lại trước khi dán: kết quả có đường dẫn trên máy bạn).

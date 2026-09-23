@@ -376,7 +376,11 @@ def probe_iso03(workspace, keychain_item, extra_homes):
         with open(probe_file, "x") as f:
             f.write("x")
         os.remove(probe_file)
-        record("ISO-03", FAIL, "ghi được file vào thư mục home, ngoài workspace", [HOME])
+        mount = home_mount()
+        if container_kind() and mount and mount[1] in ("tmpfs", "overlay"):
+            record("ISO-03", PASS, "home trong container là tạm (%s tại %s), không phải home của host" % (mount[1], mount[0]))
+        else:
+            record("ISO-03", FAIL, "ghi được file vào thư mục home, ngoài workspace", [HOME])
     except FileExistsError:
         record("ISO-03", UNKNOWN, "file thử %s đã tồn tại; xóa nó rồi chạy lại" % probe_file)
     except OSError:
@@ -430,6 +434,26 @@ def probe_iso03(workspace, keychain_item, extra_homes):
             record("ISO-03", PASS, "không kết nối được session D-Bus")
 
 
+def home_mount():
+    """Linux: (mount point, fs type) of the mount that holds HOME, from /proc/self/mountinfo."""
+    try:
+        with open("/proc/self/mountinfo") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return None
+    best = None
+    for line in lines:
+        left, _, right = line.partition(" - ")
+        fields, rfields = left.split(), right.split()
+        if len(fields) < 5 or not rfields:
+            continue
+        point = fields[4].replace("\\040", " ")
+        if HOME == point or HOME.startswith(point.rstrip("/") + "/"):
+            if best is None or len(point) > len(best[0]):
+                best = (point, rfields[0])
+    return best
+
+
 def container_kind():
     if exists("/.dockerenv"):
         return "docker"
@@ -455,9 +479,14 @@ def probe_iso04():
         with open("/proc/self/status") as f:
             status = dict(l.split(":", 1) for l in f.read().splitlines() if ":" in l)
         cap = int(status.get("CapEff", "0").strip(), 16)
+        bnd = int(status.get("CapBnd", "0").strip(), 16)
         if cap & (1 << 21):
             bad = True
             detail.append("[%s] có CAP_SYS_ADMIN (container privileged hoặc thêm capability)" % FAIL)
+        elif bnd & (1 << 21):
+            bad = True
+            detail.append("[%s] CAP_SYS_ADMIN nằm trong bounding set: container có thể chạy --privileged; "
+                          "tiến trình nào lên được root sẽ có quyền đó" % FAIL)
         nnp = status.get("NoNewPrivs", "").strip()
         if nnp != "1":
             bad = True
