@@ -33,6 +33,14 @@ body:
     validations:
       required: true
   - type: textarea
+    id: boundary
+    attributes:
+      label: Công cụ đóng boundary nào
+      description: Kiểu (Chặn, Phát hiện, Nền, Xác suất), lúc (trước khi chạy, lúc chạy, sau sự việc), tầng (OS, mạng, credential, MCP, LLM, log, dữ liệu), và những gì công cụ không bao được. Xem bảng "Công cụ đóng boundary nào" trong TOOLS.md
+      placeholder: "Chặn · lúc chạy · MCP · không thấy tool built-in của client"
+    validations:
+      required: true
+  - type: textarea
     id: ly-do
     attributes:
       label: Lý do, bằng chứng

@@ -6,6 +6,8 @@ Việc có mặt trong bảng không phải là khuyến nghị sản phẩm, v�
 
 **Cập nhật lần cuối:** 23/09/2026 · khớp với guideline 0.1.0
 
+Sau bảng công cụ là phần [Công cụ đóng boundary nào](#công-cụ-đóng-boundary-nào): mỗi công cụ chặn hay chỉ phát hiện, ở tầng nào, và đường đi nào nằm ngoài nó.
+
 Quy ước độ trưởng thành: **Ổn định** (dùng rộng rãi, API ít đổi) · **Dùng được** (đã có người chạy thật, còn thay đổi) · **Thử nghiệm** (research preview, beta, hoặc tính năng đánh dấu experimental).
 
 ---
@@ -153,6 +155,57 @@ Là khối xây dựng, chưa phải giải pháp phê duyệt cho agent (guidel
 
 ---
 
+## Công cụ đóng boundary nào
+
+Bảng công cụ phía trên trả lời "có công cụ gì". Bảng này trả lời câu mà người làm security cần hơn: công cụ đó thật sự chặn được gì, ở tầng nào, lúc nào, và đường đi nào nằm ngoài nó.
+
+Theo Nguyên lý 2 của guideline, một control chỉ tất định trên những đường đi mà nó bao phủ. Công cụ ở tầng MCP không thấy tool built-in như Bash, Edit, WebFetch hay tiến trình con. Công cụ ở tầng mạng không biết kết nối thuộc phiên agent nào. Cột "Không bao được" là chỗ để đọc trước khi tin một công cụ đã đóng một control.
+
+Quy ước:
+
+- **Kiểu.** *Chặn*: ngăn hành động xảy ra. *Phát hiện*: chỉ báo sau khi thấy, không ngăn. *Nền*: không tự chặn gì, nhưng control khác cần nó mới chạy được. *Xác suất*: có thể chặn, có thể không (guideline, Mục 1.5); không phải ranh giới kiểm soát.
+- **Lúc.** *Trước khi chạy*: lúc duyệt, lúc build, trong CI. *Lúc chạy*: trên đường đi của từng hành động. *Sau sự việc*: khi điều tra.
+- **Tầng.** *OS* (filesystem, tiến trình), *Mạng*, *Credential*, *MCP* (tool call có ngữ nghĩa), *LLM* (lời gọi model), *Log*, *Dữ liệu*.
+
+Đây là đánh giá tại 09/2026, dựa trên tài liệu công khai của từng công cụ và trên guideline, không phải kết quả kiểm thử từng công cụ. Công cụ thay đổi nhanh. Nếu một dòng sai, hoặc một giới hạn đã được công cụ khắc phục, đó là góp ý có giá trị: sửa dòng đó qua Pull Request và ghi nguồn.
+
+| Công cụ | Control | Kiểu | Lúc | Tầng | Không bao được |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Cisco `mcp-scanner`, Snyk Agent Scan | SC-01, SC-04 | Phát hiện | Trước khi chạy | MCP | Không ngăn tool chạy; chỉ thấy mô tả và cấu hình, không thấy code server làm gì khác mô tả; có false negative (SC-04) |
+| Snyk Agent Scan (tool pinning) | SC-05 | Phát hiện | Trước khi chạy, và khi quét lại | MCP | Dùng ở chế độ quét thì chỉ phát hiện thay đổi khi được chạy lại, không chặn `tools/list` mà mô hình đã nhận; kiểm tra bản đang dùng có chế độ chạy trên đường đi hay không trước khi coi nó là điểm so sánh của SC-05 |
+| Gateway MCP (agentgateway, ToolHive, Docker MCP Gateway, Bifrost, ContextForge, Obot, Microsoft MCP Gateway) | SC-02, ACT-02, OBS-01, NET-05 | Chặn | Lúc chạy | MCP | Không thấy tool built-in của client (Bash, Edit, WebFetch) và tiến trình con (Nguyên lý 2); phần lớn chưa pin đủ các trường của fingerprint (SC-05); không ràng buộc phê duyệt với tham số (ACT-06) |
+| ToolHive, Docker MCP Gateway (chạy server trong container) | SC-03, ISO-04 cho MCP server | Chặn | Lúc chạy | OS | Cô lập MCP server, không cô lập chính agent và tool built-in; server vẫn làm được mọi thứ trong phạm vi container và mạng được cấp |
+| Anthropic Sandbox Runtime (`srt`) | ISO-02, ISO-03, NET-01 | Chặn | Lúc chạy | OS, Mạng | Mặc định cho đọc mọi nơi trừ đường dẫn trong `denyRead`, nên danh sách phải đủ (ISO-03); allowlist theo tên miền, không chặn exfil qua domain đã được phép (NET-03) và không biết phiên agent đã đọc gì; trên Linux, chặn UNIX socket bằng seccomp chỉ trên x64/arm64; Windows còn alpha |
+| bubblewrap | ISO-02, ISO-03 | Chặn | Lúc chạy | OS | Chỉ là cơ chế namespace: chính sách do người gọi viết; không tự lọc mạng theo tên miền, cần proxy đi kèm (NET-01) |
+| Landlock, `landrun` | ISO-03 | Chặn | Lúc chạy | OS | Lọc mạng TCP chỉ theo cổng (kernel 6.7+), không theo tên miền; việc chặn kết nối UNIX socket phụ thuộc phiên bản ABI (ISO-03) |
+| `sandbox-exec` | ISO-02, ISO-03, NET-01 | Chặn | Lúc chạy | OS, Mạng | Deprecated, không có tài liệu chính thức cho ngôn ngữ profile; không lọc mạng theo tên miền nếu không có proxy |
+| Podman / Docker rootless | ISO-04 | Chặn | Lúc chạy | OS | Chung kernel với host; bảo vệ chỉ đúng bằng những gì không được mount và không được mở mạng (ISO-04) |
+| gVisor | ISO-04 | Chặn | Lúc chạy | OS | Kernel ở user space, chưa được coi là đạt mức microVM của ASAL-3b (ISO-04); egress vẫn phải kiểm soát riêng |
+| Kata Containers, Firecracker, E2B, `agent-sandbox` | ISO-04 (mức microVM) | Chặn | Lúc chạy | OS | Cô lập kernel, không kiểm soát egress hay credential được đưa vào; tác động qua workspace được mount vẫn nguyên |
+| Windows Sandbox | ISO-04 | Chặn | Lúc chạy | OS | Mạng chỉ bật hoặc tắt, không có allowlist: bật mạng thì NET-01 chưa đạt; bọc cả VM, không theo tiến trình |
+| Squid, Envoy (egress proxy) | NET-01, NET-02 | Chặn | Lúc chạy | Mạng | Không chặn exfil qua domain đã được phép (NET-03) nếu không có TLS inspection; không biết kết nối thuộc phiên agent nào (Mục 5.2); chỉ có tác dụng khi sandbox không còn đường ra nào khác, kể cả IPv6 và UDP |
+| Cilium (FQDN policy) | NET-01 | Chặn | Lúc chạy | Mạng | Như egress proxy: theo tên miền, không theo phiên agent; chỉ trong Kubernetes |
+| LuLu | NET-01 | Chặn | Lúc chạy | Mạng | Theo ứng dụng, không theo phiên agent: agent và mọi tiến trình con cùng chương trình dùng chung một rule |
+| Verdaccio, devpi, Nexus Community | NET-01 | Nền | Lúc chạy | Mạng | Không tự chặn gì; giúp allowlist khỏi phải mở registry công cộng. Không quét package độc nếu không cấu hình thêm |
+| OpenBao | CRED-01, CRED-03 | Nền | Lúc chạy | Credential | Rút ngắn đời credential, không giới hạn việc agent làm trong cửa sổ hiệu lực; token đã cấp vẫn sống tới lúc hết hạn ở hệ thống không kiểm lại trạng thái (CRED-03) |
+| SOPS | CRED-01 | Nền | Trước khi chạy | Credential | Bảo vệ secret khi lưu; tiến trình nào có khóa giải mã thì đọc được hết |
+| `gitleaks`, `trufflehog` | CRED-01, CRED-04 | Phát hiện | Trước khi chạy; lúc chạy khi dùng cho CRED-04 | Credential | Dựa trên mẫu, bỏ sót secret có định dạng lạ hoặc đã bị mã hóa (CRED-04) |
+| SPIFFE/SPIRE | MA-01, CRED-02 | Nền | Lúc chạy | Credential | Cho mỗi workload một danh tính; không giới hạn danh tính đó được làm gì |
+| LiteLLM, Bifrost, Portkey (gateway LLM) | RES-01, RES-02 | Chặn | Lúc chạy | LLM | Chỉ thấy lời gọi model, không thấy tool call gọi ra hệ thống khác (RES-02) |
+| LlamaFirewall, NeMo Guardrails | Bổ trợ D5 | Xác suất | Lúc chạy | LLM | Không phải ranh giới kiểm soát (Mục 1.5); chưa có đánh giá công khai với nội dung tiếng Việt (Mục 5.2) |
+| Sigstore `cosign`, OpenSSF model signing | SC-03, SC-06, SC-07 | Chặn khi bật kiểm chữ ký lúc chạy; nếu không thì chỉ là Nền | Trước khi chạy | OS | Chứng minh nguồn gốc, không chứng minh bản đã ký an toàn; vô dụng nếu không bật kiểm tra lúc chạy (SC-06) |
+| OpenID Shared Signals (CAEP, RISC) | CRED-03, OBS-04 | Nền | Lúc chạy | Credential | Chỉ có tác dụng ở hệ thống thật sự nhận và xử lý sự kiện; không thay TTL ngắn (CRED-03) |
+| OpenTelemetry (GenAI) | OBS-01, MA-04 | Phát hiện | Lúc chạy, Sau sự việc | Log | Chỉ ghi những gì được instrument; không tự chống sửa (OBS-02) |
+| Falco | OBS-03 | Phát hiện | Lúc chạy | OS | Báo động, không ngăn; chỉ Linux |
+| Tetragon | OBS-03 | Phát hiện; có thể Chặn khi bật policy enforcement | Lúc chạy | OS | Chỉ Linux; policy chặn phải tự viết và thử kỹ |
+| Trillian Tessera | OBS-02 | Phát hiện | Sau sự việc | Log | Phát hiện sửa log sau khi ghi; không ngăn thành phần ghi log bị chiếm ghi sai từ đầu (OBS-02) |
+| CRIU | OBS-05 | Nền | Sau sự việc | OS | Không checkpoint được mọi workload (GPU, kết nối TCP đang mở) (OBS-05) |
+| Presidio | MEM-05 | Phát hiện | Trước khi chạy, định kỳ | Dữ liệu | Chất lượng với định dạng dữ liệu Việt Nam chưa được đánh giá (Mục 5.2) |
+| Biscuit | MA-02 | Chặn | Lúc chạy | Credential | Chỉ có tác dụng khi service đích kiểm token và các ràng buộc của nó |
+| libfido2, python-fido2, thư viện WebAuthn server | ACT-06 | Nền | Lúc chạy | Credential | Khối xây dựng; security key không có màn hình, nên không chứng minh người duyệt đã thấy tham số nào (ACT-05) |
+
+Đọc bảng theo control thay vì theo công cụ thì thấy ngay chỗ trống: không có dòng nào *Chặn* ở tầng mạng mà biết phiên agent (NET-03 theo ngữ cảnh), không có dòng nào *Chặn* cho ACT-04 hay ACT-05, và ACT-06 chỉ có *Nền*. Đó cũng là các dòng trong bảng Khoảng trống dưới đây.
+
 ## Khoảng trống
 
 Những nhu cầu dưới đây chưa có công cụ mã nguồn mở trưởng thành trong những gì đã khảo sát. Mô tả đầy đủ ở Mục 5.2 của guideline. Nếu bạn biết công cụ lấp được một dòng, mở PR thêm nó vào bảng phía trên, và ghi tên công cụ vào cột "Công cụ đã biết" của dòng tương ứng ở đây.
@@ -177,6 +230,7 @@ Mở một Pull Request sửa đúng một dòng hoặc một nhóm dòng liên 
 2. **Nguồn**: link tới mã nguồn, và giấy phép.
 3. **Độ trưởng thành** theo quy ước ở đầu file, kèm lý do. "Dùng được" cần ít nhất một bằng chứng có người chạy thật (bài viết, issue, hoặc chính bạn).
 4. **Phép kiểm chứng của control** mà bạn đã chạy với công cụ này, nếu có. Đây là thông tin có giá trị nhất.
+5. **Một dòng cho bảng "Công cụ đóng boundary nào"**: kiểu (Chặn, Phát hiện, Nền, Xác suất), lúc, tầng, và những gì công cụ không bao được. Đừng bỏ trống cột cuối; công cụ nào cũng có đường đi nằm ngoài nó.
 
 Tiêu chí để có mặt trong bảng: có bản mã nguồn mở dùng được mà không cần mua, hoặc là tính năng có sẵn của hệ điều hành (như `sandbox-exec`, Windows Sandbox; ghi rõ ở cột Ghi chú); phục vụ trực tiếp một control; còn được duy trì.
 
