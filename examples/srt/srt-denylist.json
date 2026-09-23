@@ -1,0 +1,38 @@
+{
+  "network": {
+    "allowedDomains": [
+      "api.anthropic.com",
+      "registry.npmjs.org",
+      "pypi.org",
+      "files.pythonhosted.org"
+    ],
+    "deniedDomains": [],
+    "allowLocalBinding": false
+  },
+  "filesystem": {
+    "denyRead": [
+      "~/.ssh",
+      "~/.aws",
+      "~/.config/gcloud",
+      "~/.azure",
+      "~/.kube",
+      "~/.docker",
+      "~/.gnupg",
+      "~/.netrc",
+      "~/.git-credentials",
+      "~/.config/gh",
+      "~/.npmrc",
+      "~/.pypirc",
+      "~/.bash_history",
+      "~/.zsh_history",
+      "~/Library/Keychains",
+      "~/Library/Application Support/Google/Chrome",
+      "~/Library/Application Support/Firefox",
+      "~/.config/google-chrome",
+      "~/.mozilla"
+    ],
+    "allowRead": [],
+    "allowWrite": [".", "/tmp"],
+    "denyWrite": [".env", ".mcp.json", ".claude", ".cursor", ".vscode", ".git/hooks"]
+  }
+}

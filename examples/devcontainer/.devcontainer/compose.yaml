@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: Apache-2.0
+# The agent container sits on an internal network with no route out. Its only way
+# out is the proxy, which allows CONNECT to the domains in allowlist.txt.
+# This blocks IPv4, IPv6 and UDP by construction (NET-01), without giving the
+# agent container NET_ADMIN to manage its own firewall.
+name: agent-sandbox
+
+services:
+  agent:
+    build: .
+    volumes:
+      # Only the project is mounted (ISO-04). Never mount $HOME, ~/.ssh or docker.sock.
+      - ${WORKSPACE_DIR:-..}:/workspace
+    working_dir: /workspace
+    environment:
+      HTTPS_PROXY: http://proxy:3128
+      HTTP_PROXY: http://proxy:3128
+      https_proxy: http://proxy:3128
+      http_proxy: http://proxy:3128
+    networks: [sandbox]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/agent:uid=1000,gid=1000,mode=0700
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    command: sleep infinity
+    depends_on: [proxy]
+
+  proxy:
+    image: ubuntu/squid@sha256:6a097f68bae708cedbabd6188d68c7e2e7a38cedd05a176e1cc0ba29e3bbe029
+    volumes:
+      - ./squid.conf:/etc/squid/squid.conf:ro
+      - ./allowlist.txt:/etc/squid/allowlist.txt:ro
+    networks: [sandbox, egress]
+
+networks:
+  sandbox:
+    internal: true
+  egress: {}
