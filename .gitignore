@@ -2,6 +2,9 @@
 dist/
 *.pdf
 
+# Local Claude Code worktrees
+.claude/
+
 # OS and editor
 .DS_Store
 Thumbs.db
