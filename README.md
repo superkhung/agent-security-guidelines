@@ -18,7 +18,7 @@ companion-spec/   Agent Action Binding: Wire Format and Test Vectors (tiếng An
 pdf/              Công cụ xuất PDF
 ```
 
-`companion-spec/` là đặc tả wire format và test vectors cho SC-05, ACT-04, ACT-06 và OBS-02. Bản `aab-00` mới có cấu trúc spec và danh mục test vectors, **chưa dùng để cài đặt được**. Xem Phụ lục E của guideline.
+`companion-spec/` là đặc tả wire format và test vectors cho SC-05, ACT-04, ACT-06 và OBS-02. Bản `aab-00` **chưa dùng để cài đặt được**. Đã có bản cài đặt tham chiếu đầu tiên (Python) và file test vector trong `companion-spec/reference/` và `companion-spec/vectors/`; mọi giá trị kỳ vọng còn là tạm thời cho tới khi có bản cài đặt độc lập thứ hai. Xem Phụ lục E của guideline.
 
 ## Bắt đầu từ đâu
 

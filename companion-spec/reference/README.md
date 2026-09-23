@@ -11,6 +11,8 @@ This directory holds **one** implementation of the draft
 > not as a reference answer. Where this code and the spec disagree, the spec wins, and where the
 > spec is unclear the code says so with a `# SPEC-AMBIGUITY:` comment.
 
+The ambiguities and contradictions found while writing this code are collected, with proposed fixes, in [SPEC-FINDINGS.md](SPEC-FINDINGS.md). They are input for `aab-01`; the spec itself is frozen for the comment round.
+
 ## Run
 
 Python 3.10 or newer, standard library only. No network access, no packages.
