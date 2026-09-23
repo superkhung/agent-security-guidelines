@@ -1,0 +1,50 @@
+name: Góp ý nội dung guideline
+description: Phản biện threat model, control, cấp ASAL, độ khó, hoặc báo lỗi trong guideline
+title: "[<mã control hoặc số mục>] "
+labels: ["góp ý"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ghi mã control (ví dụ `NET-03`) hoặc số mục (ví dụ `3.5`) ở đầu tiêu đề để góp ý gom được theo control.
+        Không đăng chi tiết khai thác lỗ hổng chưa được vá của một sản phẩm cụ thể; báo cho nhà cung cấp trước.
+  - type: dropdown
+    id: loai
+    attributes:
+      label: Loại góp ý
+      options:
+        - Threat model, kịch bản tấn công control không bao được
+        - Control sai, thiếu, hoặc tuyên bố quá mức
+        - Cấp ASAL, mức bắt buộc/nên/tùy chọn
+        - Độ khó, công sức thực tế
+        - Phép kiểm chứng không đạt dù đã làm đúng hướng dẫn
+        - Lỗi chính tả, câu khó hiểu
+        - Khác
+    validations:
+      required: true
+  - type: input
+    id: vi-tri
+    attributes:
+      label: Vị trí
+      description: Mã control hoặc số mục
+      placeholder: "ISO-03 · Làm thế nào"
+    validations:
+      required: true
+  - type: textarea
+    id: noi-dung
+    attributes:
+      label: Góp ý
+      description: Điều gì sai hoặc thiếu, và vì sao
+    validations:
+      required: true
+  - type: textarea
+    id: de-xuat
+    attributes:
+      label: Đề xuất sửa
+      description: Không bắt buộc, nhưng rất có ích
+  - type: textarea
+    id: moi-truong
+    attributes:
+      label: Môi trường đã thử
+      description: Với nhận định về hành vi của client, gateway, MCP server hay hệ điều hành, ghi tên và phiên bản
+      placeholder: "Claude Code 2.x trên macOS 15, srt ..."

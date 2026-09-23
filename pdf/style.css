@@ -1,0 +1,236 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Agent Security Technical Guidelines — PDF stylesheet (WeasyPrint) */
+
+:root {
+  --ink: #1b2430;
+  --muted: #5b6573;
+  --navy: #1f3a5f;
+  --accent: #2b6cb0;
+  --rule: #d5dbe3;
+  --tint: #f3f6fa;
+  --tint2: #eaf0f7;
+}
+
+@page {
+  size: A4;
+  margin: 24mm 18mm 22mm 18mm;
+  @top-left {
+    content: "Agent Security Technical Guidelines"; /* build.py appends the version */
+    font: 400 7.5pt "Be Vietnam Pro", "DejaVu Sans", sans-serif;
+    color: var(--muted);
+    vertical-align: bottom;
+    padding-bottom: 4mm;
+  }
+  @top-right {
+    content: string(section);
+    font: 400 7.5pt "Be Vietnam Pro", "DejaVu Sans", sans-serif;
+    color: var(--muted);
+    vertical-align: bottom;
+    padding-bottom: 4mm;
+  }
+  @bottom-left {
+    content: "superkhung · VNSecurity"; /* build.py sets author and status from the document */
+    font: 400 7.5pt "Be Vietnam Pro", "DejaVu Sans", sans-serif;
+    color: var(--muted);
+  }
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font: 500 7.5pt "Be Vietnam Pro", "DejaVu Sans", sans-serif;
+    color: var(--muted);
+  }
+}
+@page cover {
+  margin: 0;
+  @top-left { content: none; } @top-right { content: none; }
+  @bottom-left { content: none; } @bottom-right { content: none; }
+}
+@page toc {
+  @top-right { content: "Mục lục"; }
+}
+
+html { font-family: "Be Vietnam Pro", "DejaVu Sans", sans-serif; }
+body {
+  font-size: 9.6pt;
+  line-height: 1.55;
+  color: var(--ink);
+  font-weight: 400;
+  hyphens: manual;
+}
+p { margin: 0 0 2.6mm 0; orphans: 3; widows: 3; text-align: left; }
+strong { font-weight: 600; color: #111a24; }
+a { color: var(--accent); text-decoration: none; }
+hr { display: none; }
+
+/* ---------- Cover ---------- */
+section.cover {
+  page: cover;
+  height: 297mm;
+  box-sizing: border-box;
+  padding: 58mm 22mm 20mm 22mm;
+  background: linear-gradient(180deg, var(--navy) 0, var(--navy) 118mm, #ffffff 118mm);
+  break-after: page;
+}
+section.cover .doc-title {
+  color: #ffffff;
+  font-size: 25pt;
+  line-height: 1.2;
+  font-weight: 700;
+  margin: 0 0 4mm 0;
+}
+section.cover .doc-title + p strong {
+  color: #cfe0f5;
+  font-size: 13pt;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+section.cover table {
+  margin-top: 52mm;
+  width: 100%;
+  font-size: 9pt;
+  border: none;
+}
+section.cover thead { display: none; }
+section.cover td {
+  border: none;
+  border-bottom: 0.5pt solid var(--rule);
+  padding: 2.2mm 2mm;
+  vertical-align: top;
+}
+section.cover td:first-child {
+  width: 34mm;
+  color: var(--muted);
+  font-weight: 500;
+}
+section.cover tr:nth-child(even) td { background: none; }
+
+/* ---------- TOC ---------- */
+nav#TOC {
+  page: toc;
+  break-after: page;
+}
+nav#TOC::before {
+  content: "Mục lục";
+  display: block;
+  font-size: 18pt;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 6mm;
+  padding-bottom: 2mm;
+  border-bottom: 1.2pt solid var(--navy);
+}
+nav#TOC ul { list-style: none; margin: 0; padding: 0; }
+nav#TOC > ul > li { margin-top: 2.4mm; }
+nav#TOC > ul > li > a { font-weight: 600; color: var(--navy); }
+nav#TOC ul ul { padding-left: 6mm; }
+nav#TOC ul ul li { margin-top: 0.6mm; }
+nav#TOC a { color: var(--ink); font-size: 9.2pt; }
+nav#TOC a::after {
+  content: leader('.') target-counter(attr(href), page);
+  color: var(--muted);
+}
+
+/* ---------- Headings ---------- */
+h1, h2, h3, h4 { font-weight: 700; color: var(--navy); break-after: avoid; line-height: 1.3; }
+h2 {
+  string-set: section content();
+  break-before: page;
+  font-size: 17pt;
+  margin: 0 0 6mm 0;
+  padding-bottom: 2.5mm;
+  border-bottom: 1.2pt solid var(--navy);
+}
+h3 {
+  font-size: 12.5pt;
+  margin: 7mm 0 3mm 0;
+}
+h4 {
+  font-size: 10.6pt;
+  margin: 7mm 0 0 0;
+  padding: 2.2mm 3mm;
+  background: var(--navy);
+  color: #ffffff;
+  border-radius: 1.2mm 1.2mm 0 0;
+}
+h3 + h4 { margin-top: 4mm; }
+
+/* ---------- Tables ---------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2mm 0 4mm 0;
+  font-size: 8.4pt;
+  line-height: 1.4;
+}
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th {
+  background: var(--tint2);
+  color: var(--navy);
+  font-weight: 600;
+  text-align: left;
+  padding: 1.6mm 2mm;
+  border-bottom: 0.9pt solid var(--navy);
+}
+td {
+  padding: 1.5mm 2mm;
+  border-bottom: 0.4pt solid var(--rule);
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: #fafbfd; }
+
+/* Control card metadata strip: the table right after a card title */
+h4 + table {
+  margin-top: 0;
+  margin-bottom: 3.5mm;
+  background: var(--tint);
+  font-size: 8.2pt;
+  break-before: avoid;
+}
+h4 + table th {
+  background: var(--tint2);
+  border-bottom: 0.5pt solid var(--rule);
+  font-size: 7.6pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+h4 + table td { border-bottom: none; background: var(--tint); }
+h4 + table th:nth-child(1), h4 + table td:nth-child(1) { width: 16%; }
+h4 + table th:nth-child(2), h4 + table td:nth-child(2) { width: 22%; }
+h4 + table th:nth-child(3), h4 + table td:nth-child(3) { width: 34%; }
+
+/* ---------- Code & diagrams ---------- */
+code {
+  font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  font-size: 8.3pt;
+  background: var(--tint);
+  padding: 0.2mm 0.8mm;
+  border-radius: 0.6mm;
+}
+pre {
+  font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  font-size: 7.6pt;
+  line-height: 1.35;
+  background: var(--tint);
+  border-left: 1.2mm solid var(--accent);
+  padding: 3mm 3.5mm;
+  margin: 2mm 0 4mm 0;
+  white-space: pre;
+  break-inside: avoid;
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+
+/* ---------- Callouts ---------- */
+blockquote {
+  margin: 3mm 0 4mm 0;
+  padding: 2.8mm 4mm;
+  background: #fff8e6;
+  border-left: 1.2mm solid #d69e2e;
+  color: var(--ink);
+  break-inside: avoid;
+}
+blockquote p:last-child { margin-bottom: 0; }
+
+/* ---------- Lists ---------- */
+ul, ol { margin: 0 0 3mm 0; padding-left: 6mm; }
+li { margin-bottom: 1mm; }

@@ -1,0 +1,41 @@
+name: Công cụ (TOOLS.md)
+description: Đề xuất thêm, sửa, hoặc gỡ một công cụ trong bản đồ công cụ
+title: "[TOOLS] "
+labels: ["công cụ"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Có thể gửi Pull Request sửa thẳng `TOOLS.md` theo hướng dẫn ở cuối file đó. Issue này dành cho trường hợp bạn chưa muốn tự sửa.
+        Tài liệu không xếp hạng công cụ, và không nhận nội dung chủ yếu là quảng bá sản phẩm.
+  - type: dropdown
+    id: hanh-dong
+    attributes:
+      label: Đề xuất
+      options:
+        - Thêm công cụ
+        - Sửa thông tin (độ trưởng thành, ghi chú, link)
+        - Gỡ công cụ
+        - Công cụ lấp một khoảng trống ở Mục 5.2
+    validations:
+      required: true
+  - type: input
+    id: ten
+    attributes:
+      label: Công cụ và link mã nguồn
+    validations:
+      required: true
+  - type: input
+    id: control
+    attributes:
+      label: Control phục vụ
+      placeholder: "NET-01, NET-02"
+    validations:
+      required: true
+  - type: textarea
+    id: ly-do
+    attributes:
+      label: Lý do, bằng chứng
+      description: Giấy phép; bằng chứng có người chạy thật; phép kiểm chứng của control đã chạy với công cụ này (nếu có)
+    validations:
+      required: true

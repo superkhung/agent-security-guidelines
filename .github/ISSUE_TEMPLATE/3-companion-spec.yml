@@ -1,0 +1,27 @@
+name: Companion spec (aab)
+description: Comments on Agent Action Binding - Wire Format and Test Vectors
+title: "[aab-00] "
+labels: ["companion-spec"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The draft is not for implementation. Comments on open issues (Appendix C, `OI-n`) are the most useful right now.
+  - type: input
+    id: section
+    attributes:
+      label: Section, test vector, or open issue
+      placeholder: "4.3, FP-011, OI-6"
+    validations:
+      required: true
+  - type: textarea
+    id: comment
+    attributes:
+      label: Comment
+      description: For encoding issues, give the exact bytes or input that two implementations would handle differently
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change

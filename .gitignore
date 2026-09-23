@@ -1,0 +1,14 @@
+# Build output: PDFs are attached to GitHub Releases, not committed
+dist/
+*.pdf
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
