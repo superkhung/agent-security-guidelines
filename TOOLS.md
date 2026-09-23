@@ -49,6 +49,7 @@ Quy ước độ trưởng thành: **Ổn định** (dùng rộng rãi, API ít 
 | Kata Containers | Linux | Ổn định | Mỗi container một VM nhẹ | [github.com/kata-containers/kata-containers](https://github.com/kata-containers/kata-containers) |
 | Firecracker | Linux | Ổn định | microVM | [github.com/firecracker-microvm/firecracker](https://github.com/firecracker-microvm/firecracker) |
 | E2B | Linux/cloud | Dùng được | Nền tảng sandbox cho agent dựng trên Firecracker | [github.com/e2b-dev/E2B](https://github.com/e2b-dev/E2B) |
+| Windows Sandbox | Windows 10/11 Pro, Enterprise, Education | Ổn định | Có sẵn trong OS, không phải mã nguồn mở. VM dùng một lần trên Hyper-V, cấu hình bằng file `.wsb` (thư mục map, `ReadOnly`, tắt mạng, tắt clipboard). Mạng chỉ bật hoặc tắt, không có allowlist, nên không thay được NET-01 | [learn.microsoft.com/…/windows-sandbox](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/) |
 | `kubernetes-sigs/agent-sandbox` | Kubernetes | Dùng được | CRD `Sandbox`, giao cô lập cho gVisor/Kata qua RuntimeClass | [github.com/kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) |
 
 ### Egress · NET-01, NET-02, NET-03
@@ -159,7 +160,7 @@ Những nhu cầu dưới đây chưa có công cụ mã nguồn mở trưởng 
 | Khoảng trống | Control | Công cụ đã biết (nếu có) |
 | :--- | :--- | :--- |
 | Egress biết đang phục vụ phiên agent nào | NET-03 | |
-| Sandbox cho tiến trình tùy ý trên Windows | ISO-02, ISO-03 | `srt` (phần Windows đang phát triển) |
+| Sandbox cho tiến trình tùy ý trên Windows | ISO-02, ISO-03 | `srt` (phần Windows đang phát triển); Windows Sandbox bọc cả VM, không theo tiến trình |
 | Phê duyệt có màn hình tin cậy và ràng buộc với tham số | ACT-05, ACT-06 | |
 | Capability lease có ngân sách | ACT-04 | |
 | Định dạng chung cho fingerprint tool và bản ghi hành động | SC-05, OBS-02 | Companion spec (Phụ lục E), bản nháp `aab-00` trong `companion-spec/` |
@@ -177,7 +178,7 @@ Mở một Pull Request sửa đúng một dòng hoặc một nhóm dòng liên 
 3. **Độ trưởng thành** theo quy ước ở đầu file, kèm lý do. "Dùng được" cần ít nhất một bằng chứng có người chạy thật (bài viết, issue, hoặc chính bạn).
 4. **Phép kiểm chứng của control** mà bạn đã chạy với công cụ này, nếu có. Đây là thông tin có giá trị nhất.
 
-Tiêu chí để có mặt trong bảng: có bản mã nguồn mở dùng được mà không cần mua; phục vụ trực tiếp một control; còn được duy trì.
+Tiêu chí để có mặt trong bảng: có bản mã nguồn mở dùng được mà không cần mua, hoặc là tính năng có sẵn của hệ điều hành (như `sandbox-exec`, Windows Sandbox; ghi rõ ở cột Ghi chú); phục vụ trực tiếp một control; còn được duy trì.
 
 Tiêu chí để bị gỡ hoặc hạ độ trưởng thành: repo bị archive; không có bản phát hành mới trong 12 tháng mà còn issue bảo mật mở; đổi giấy phép sang dạng không còn là mã nguồn mở (ghi lại lịch sử ở cột Ghi chú thay vì xóa ngay).
 

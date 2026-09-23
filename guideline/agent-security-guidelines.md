@@ -611,7 +611,7 @@ Snyk Agent Scan có tính năng tool pinning theo hướng này. Các gateway �
 
 **Làm thế nào.** Claude Code có chế độ sandbox dựa trên Anthropic Sandbox Runtime (`srt`), dùng `sandbox-exec` trên macOS và bubblewrap trên Linux, kèm proxy lọc mạng. Codex CLI có các chế độ sandbox theo mức (chỉ đọc, ghi trong workspace, không giới hạn). Kiểm tra tài liệu client của bạn vì tên lệnh và tùy chọn đổi theo phiên bản. ISO-02 chỉ bảo vệ những tiến trình nằm trong ranh giới sandbox của client. MCP server local, helper process và tiến trình do extension của IDE khởi chạy không được coi là đã được bảo vệ nếu chưa kiểm chứng riêng. MCP server chạy local thường nằm ngoài sandbox của client, nên bọc chúng riêng bằng `srt` (công cụ này được thiết kế để sandbox cả agent, MCP server local và lệnh tùy ý).
 
-Trên Windows, thứ tự ưu tiên thực tế là: Dev Container chạy trên WSL2 (dùng được toàn bộ cơ chế filesystem và mạng của Linux); WSL2 chỉ mount thư mục dự án; tài khoản Windows riêng cho agent (ISO-01). Nếu chưa làm được cách nào trong số đó, cách giảm rủi ro thực tế nhất là tắt hoặc deny tool shell built-in của client (Bash, PowerShell, cmd) và chỉ cho agent dùng các tool MCP đã duyệt, đi qua gateway. Làm vậy thì coding agent mất phần lớn sức mạnh, và đó là cái giá thật của việc chưa có sandbox dễ dùng trên Windows.
+Trên Windows, thứ tự ưu tiên thực tế là: Dev Container chạy trên WSL2 (dùng được toàn bộ cơ chế filesystem và mạng của Linux); WSL2 chỉ mount thư mục dự án; Windows Sandbox cho việc chạy thử agent lạ hoặc chạy chế độ tự động mà không cần cài Docker hay WSL2 (ISO-04); tài khoản Windows riêng cho agent (ISO-01). Nếu chưa làm được cách nào trong số đó, cách giảm rủi ro thực tế nhất là tắt hoặc deny tool shell built-in của client (Bash, PowerShell, cmd) và chỉ cho agent dùng các tool MCP đã duyệt, đi qua gateway. Làm vậy thì coding agent mất phần lớn sức mạnh, và đó là cái giá thật của việc chưa có sandbox dễ dùng trên Windows.
 
 **Kiểm chứng.** Trong phiên agent, yêu cầu nó `cat ~/.ssh/id_ed25519` và `curl` tới một domain ngoài allowlist. Cả hai phải thất bại.
 
@@ -641,7 +641,7 @@ Trên Windows, thứ tự ưu tiên thực tế là: Dev Container chạy trên 
 
 *Qua kho credential của hệ điều hành.* macOS Keychain, Windows Credential Manager, Secret Service/gnome-keyring qua D-Bus trên Linux, và CLI của password manager được truy cập qua IPC chứ không qua đường dẫn file, nên danh sách cấm đọc file không chặn được chúng. Chặn IPC tới các dịch vụ này trong profile sandbox, hoặc chạy agent dưới một user không có keychain của người dùng chính (ISO-01).
 
-*Cơ chế theo nền tảng.* Trên Linux: bubblewrap (qua `srt`), hoặc Landlock (có trong kernel từ 5.13, không cần root; có CLI như `landrun`). Trên macOS: `sandbox-exec` với profile phù hợp (qua `srt`). Lưu ý `srt` mặc định cho phép đọc ở mọi nơi trừ những đường dẫn được khai báo cấm, nên danh sách cấm đọc phải được khai báo đầy đủ. Trên Windows chưa có cơ chế tương đương dễ dùng cho tiến trình tùy ý: cách thực tế là tài khoản riêng (ISO-01), Dev Container, hoặc WSL2 chỉ mount thư mục dự án.
+*Cơ chế theo nền tảng.* Trên Linux: bubblewrap (qua `srt`), hoặc Landlock (có trong kernel từ 5.13, không cần root; có CLI như `landrun`). Trên macOS: `sandbox-exec` với profile phù hợp (qua `srt`). Lưu ý `srt` mặc định cho phép đọc ở mọi nơi trừ những đường dẫn được khai báo cấm, nên danh sách cấm đọc phải được khai báo đầy đủ. Trên Windows chưa có cơ chế tương đương dễ dùng cho tiến trình tùy ý: cách thực tế là tài khoản riêng (ISO-01), Dev Container, WSL2 chỉ mount thư mục dự án, hoặc chạy cả agent trong Windows Sandbox (ISO-04).
 
 Không dựa vào MCP Roots để giới hạn thư mục. Roots chỉ là thông tin client báo cho server, không phải cơ chế cưỡng chế, và đã bị deprecate ở spec 2026-07-28 (SEP-2577).
 
@@ -671,9 +671,34 @@ Nếu tự viết tool, dùng `openat2()` với `RESOLVE_BENEATH` trên Linux đ
 
 Với code không tin cậy hoặc môi trường nhiều người dùng chung, dùng runtime cô lập mạnh hơn container thường: gVisor, Kata Containers, hoặc Firecracker microVM (E2B là một nền tảng mã nguồn mở dựng trên Firecracker). Trên Kubernetes, dự án `kubernetes-sigs/agent-sandbox` cung cấp CRD `Sandbox` và giao phần cô lập cho gVisor hoặc Kata qua RuntimeClass.
 
+Trên máy Windows không có Docker hay WSL2, Windows Sandbox là cách nhanh nhất để có một môi trường dùng một lần. Nó có sẵn trên Windows 10/11 Pro, Enterprise và Education (cần bật tính năng Windows Sandbox và ảo hóa phần cứng), là một VM nhẹ trên Hyper-V khởi động trong vài giây, và bị xóa sạch khi đóng. Cấu hình bằng một file `.wsb`:
+
+```xml
+<Configuration>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>C:\projects\du-an-a</HostFolder>
+      <SandboxFolder>C:\work</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>C:\tools\agent-setup</HostFolder>
+      <SandboxFolder>C:\setup</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <Networking>Disable</Networking>
+  <ClipboardRedirection>Disable</ClipboardRedirection>
+  <AudioInput>Disable</AudioInput>
+  <LogonCommand><Command>C:\setup\install.cmd</Command></LogonCommand>
+</Configuration>
+```
+
+Workspace phải map có quyền ghi thì agent mới sửa được code, và thay đổi ở đó còn lại trên host sau khi sandbox bị xóa. Những thư mục khác, như script cài đặt, map `ReadOnly`. Có hai giới hạn cần biết. Thứ nhất, mạng chỉ có bật hoặc tắt: `Networking` tắt thì agent không gọi được LLM API; bật thì sandbox đi ra Internet qua switch mặc định của Hyper-V mà không có allowlist, nên NET-01 chưa đạt cho phiên đó. Dùng Windows Sandbox có mạng cho agent đọc dữ liệu nhạy cảm thì phải ghi nhận rủi ro này. Thứ hai, mọi thứ cài trong sandbox mất khi đóng, nên client agent phải được cài lại mỗi lần, thường qua `LogonCommand`. Windows Sandbox là VM có kernel riêng, nhưng bản này chưa xét nó cho yêu cầu microVM của ASAL-3b, vì nó là công cụ cho máy trạm chứ không phải hạ tầng chạy agent tự động.
+
 Ở ASAL-3b, "mức microVM" nghĩa là workload chạy trên kernel khách riêng, không dùng chung kernel với host: Kata Containers hoặc Firecracker. gVisor chặn syscall bằng một kernel chạy ở user space, mạnh hơn container thường nhiều, nhưng là một mô hình cô lập khác. Bản này chưa coi gVisor là đạt yêu cầu microVM của ASAL-3b, và đây là một điểm mình cần góp ý.
 
-**Kiểm chứng.** Từ trong container thử `ls /var/run/docker.sock`, `mount -t tmpfs tmpfs /mnt`, và truy cập metadata endpoint của cloud (`169.254.169.254`). Tất cả phải thất bại.
+**Kiểm chứng.** Từ trong container thử `ls /var/run/docker.sock`, `mount -t tmpfs tmpfs /mnt`, và truy cập metadata endpoint của cloud (`169.254.169.254`). Tất cả phải thất bại. Với Windows Sandbox: từ trong sandbox không thấy thư mục người dùng của host, ghi vào thư mục map `ReadOnly` thất bại, và nếu đã tắt mạng thì mọi kết nối ra ngoài thất bại.
 
 **Bỏ qua khi.** Agent chỉ chạy ở chế độ có người duyệt từng lệnh và đã có ISO-02, ISO-03.
 
@@ -1606,6 +1631,7 @@ Quy ước độ trưởng thành: **Ổn định** (dùng rộng rãi, API ít 
 | Container và microVM | ISO-04 | Podman / Docker rootless | Linux, macOS (qua VM) | Ổn định | |
 | | | gVisor, Kata Containers, Firecracker | Linux | Ổn định | Cô lập mạnh hơn container thường |
 | | | E2B | Linux/cloud | Dùng được | Nền tảng sandbox cho agent dựng trên Firecracker |
+| | | Windows Sandbox | Windows 10/11 Pro, Enterprise, Education | Ổn định | Có sẵn trong OS, không phải mã nguồn mở. VM dùng một lần, cấu hình bằng file `.wsb`; mạng chỉ bật hoặc tắt, không có allowlist |
 | | | `kubernetes-sigs/agent-sandbox` | Kubernetes | Dùng được | CRD `Sandbox`, giao cô lập cho gVisor/Kata |
 | Egress | NET-01, NET-02, NET-03 | Squid, Envoy | Đa nền tảng | Ổn định | Proxy allowlist theo tên miền |
 | | | Cilium (FQDN policy) | Kubernetes | Ổn định | |
@@ -1634,7 +1660,7 @@ Phần lớn control ở ASAL-0 đến ASAL-2 làm được bằng công cụ c�
 
 **Kiểm soát egress biết đang phục vụ agent nào.** Firewall và proxy hiện nay biết kết nối đến từ máy nào, user nào, may lắm là tiến trình nào. Chúng không biết kết nối đó thuộc phiên agent nào, đang làm việc cho yêu cầu nào của người dùng, và phiên đó đã đọc dữ liệu nhạy cảm hay chưa. Muốn áp NET-03 theo ngữ cảnh (phiên đã đọc secret thì mất quyền ghi ra ngoài) cần một lớp gắn danh tính phiên agent vào kết nối mạng, và lớp đó phải bao được cả tool built-in lẫn tiến trình con, trên cả ba hệ điều hành. Kiến trúc zero trust network access có sẵn phần lớn nguyên liệu, nhưng mình chưa tìm thấy công cụ mở nào ghép nó với ngữ nghĩa của agent.
 
-**Sandbox cho tiến trình tùy ý trên Windows.** Linux có bubblewrap và Landlock, macOS có `sandbox-exec`. Windows có AppContainer và WFP, nhưng mình chưa thấy công cụ phổ biến nào bọc một tiến trình CLI tùy ý với chính sách filesystem và mạng dễ viết như hai nền tảng kia. `srt` đang có phần Windows ở giai đoạn phát triển. Trong khi chờ, đội dùng Windows phải dựa vào tài khoản riêng, WSL2 hoặc container, tức là đổi trải nghiệm lấy an toàn.
+**Sandbox cho tiến trình tùy ý trên Windows.** Linux có bubblewrap và Landlock, macOS có `sandbox-exec`. Windows có AppContainer và WFP, nhưng mình chưa thấy công cụ phổ biến nào bọc một tiến trình CLI tùy ý với chính sách filesystem và mạng dễ viết như hai nền tảng kia. `srt` đang có phần Windows ở giai đoạn phát triển. Windows Sandbox giải quyết được việc chạy agent trong một môi trường dùng một lần, nhưng nó bọc cả một VM chứ không phải từng tiến trình, và không lọc mạng theo đích. Trong khi chờ, đội dùng Windows phải dựa vào tài khoản riêng, WSL2, container hoặc Windows Sandbox, tức là đổi trải nghiệm lấy an toàn.
 
 **Phê duyệt có màn hình tin cậy và ràng buộc với tham số.** Security key chứng minh người dùng có mặt và đồng ý ký, nhưng không có màn hình nên không chứng minh được người dùng đã thấy gì. Các extension WebAuthn cho transaction confirmation từng có trong spec nhưng gần như không có authenticator nào hỗ trợ và đã bị loại bỏ. Secure Payment Confirmation có giao diện tin cậy do trình duyệt vẽ, nhưng chỉ cho thanh toán trong trình duyệt. Với agent, mình chưa tìm thấy công cụ mở nào ghép ACT-05 với ACT-06 thành một luồng hoàn chỉnh, và cũng chưa thấy chuẩn nào đang được soạn cho đúng việc đó.
 
@@ -1713,7 +1739,7 @@ Cờ `-y` ở đây chỉ bỏ câu hỏi xác nhận cài đặt, thứ quan tr
 
 **Bước 6. Dọn secret.** Chạy `gitleaks dir <thư-mục-dự-án>` (bản cũ dùng `gitleaks detect --no-git --source <thư-mục>`) trên các dự án bạn dùng với agent. Chuyển mọi secret tìm được ra khỏi workspace (CRED-01). Thay access key cloud tĩnh bằng đăng nhập SSO có credential ngắn hạn. Phép thử: chạy lại `gitleaks`, kết quả rỗng.
 
-**Bước 7. Chế độ tự động chỉ chạy trong container.** Nếu bạn dùng cờ bỏ qua phê duyệt, chỉ dùng nó bên trong devcontainer hoặc container chỉ mount thư mục dự án (ISO-04). Phép thử: từ trong container, `ls ~` không thấy file của máy host.
+**Bước 7. Chế độ tự động chỉ chạy trong container.** Nếu bạn dùng cờ bỏ qua phê duyệt, chỉ dùng nó bên trong devcontainer hoặc container chỉ mount thư mục dự án, hoặc trên Windows là Windows Sandbox chỉ map thư mục dự án (ISO-04). Phép thử: từ trong container hoặc sandbox, không thấy file trong thư mục người dùng của máy host.
 
 **Bước 8. Không bấm "cho phép tất cả".** Tắt mọi chế độ tự cho phép tất cả tool bên ngoài container, và chọn client hiển thị đầy đủ tham số khi hỏi phê duyệt (ACT-03). Phép thử: yêu cầu agent sửa một file, hộp thoại phê duyệt phải hiển thị đường dẫn và diff.
 
