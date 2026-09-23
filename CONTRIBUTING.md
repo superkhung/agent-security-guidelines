@@ -25,7 +25,9 @@ Tài liệu đang ở dạng public draft. Mọi góp ý đi qua Issue hoặc Pu
 | Companion spec | `companion-spec/` | Tiếng Anh, MUST/SHOULD theo RFC 2119. Thay đổi byte layout cần cập nhật cả Appendix B (test vectors) |
 | Công cụ xuất PDF | `pdf/` | Chạy `python3 pdf/build.py` và kiểm tra PDF trước khi gửi |
 
-Không commit PDF. PDF được build và đính kèm khi phát hành.
+Trước khi gửi, chạy `python3 scripts/lint.py`. Script kiểm tra những chỗ hay vỡ khi sửa: bảng 3.4 khớp Phụ lục C và trường "Cấp" của từng thẻ, thẻ control đủ tám trường, số cột của bảng, link tương đối, mã lỗi và câu hỏi mở trong companion spec. CI chạy lại script này và build thử PDF cho mọi Pull Request.
+
+Không commit PDF. Khi push tag `vX.Y.Z`, CI tự build PDF và đính kèm vào Release.
 
 ## Quy ước viết
 
