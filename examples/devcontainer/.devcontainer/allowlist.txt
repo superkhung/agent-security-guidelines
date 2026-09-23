@@ -1,0 +1,8 @@
+# One domain per line. A leading dot also allows subdomains; avoid it, and never
+# allowlist domains where anyone can create subdomains (NET-02). Domains that
+# accept writes (github.com, gist, paste sites, webhooks) are exfiltration paths:
+# see NET-03 before adding them.
+api.anthropic.com
+registry.npmjs.org
+pypi.org
+files.pythonhosted.org
