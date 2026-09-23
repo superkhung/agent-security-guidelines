@@ -1,0 +1,15 @@
+{
+  "id": "ENC-029",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "JSON text {\"a\":NaN}",
+  "object": "json",
+  "alg": "sha-256",
+  "input_json_text": "{\"a\":NaN}",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_JSON"
+  }
+}

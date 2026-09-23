@@ -1,0 +1,17 @@
+{
+  "id": "ACT-005",
+  "group": "ACT",
+  "required_minimum": true,
+  "description": "Duplicate key in arguments",
+  "object": "request",
+  "alg": "sha-256",
+  "input": {
+    "body_json_text": "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"name\":\"read_file\",\"arguments\":{\"path\":\"a\",\"path\":\"b\"}}}"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_DUP_KEY"
+  }
+}

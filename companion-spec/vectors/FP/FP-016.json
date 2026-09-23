@@ -1,0 +1,24 @@
+{
+  "id": "FP-016",
+  "group": "FP",
+  "required_minimum": false,
+  "description": "url identity with a non-ASCII host (stra\u00dfe) whose transitional and non-transitional A-labels differ",
+  "object": "server-identity",
+  "alg": "sha-256",
+  "input": {
+    "kind": "url",
+    "id": "https://stra\u00dfe.example/mcp"
+  },
+  "expected": {
+    "status": "pending"
+  },
+  "precheck": {
+    "stdlib": {
+      "result": "unsupported"
+    },
+    "crypto": {
+      "result": "unsupported"
+    }
+  },
+  "note": "needs UTS #46: the Python standard library has no UTS #46 mapping table, so this implementation restricts url hosts to ASCII. Expected (not generated): identity id https://xn--strae-oqa.example/mcp (non-transitional; transitional processing would give strasse.example)."
+}

@@ -1,0 +1,37 @@
+{
+  "id": "ENC-013",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Same object, different key order and whitespace",
+  "object": "json",
+  "alg": "sha-256",
+  "input": {
+    "cases": [
+      {
+        "input_json_text": "{\"b\":1,\"a\":[1,2.0]}"
+      },
+      {
+        "input_json_text": "{ \"a\" : [ 1 , 2 ] ,\n  \"b\" : 1 }"
+      }
+    ]
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "accept",
+    "cases": [
+      {
+        "canonical_hex": "7b2261223a5b312c325d2c2262223a317d",
+        "canonical_text": "{\"a\":[1,2],\"b\":1}",
+        "result": "accept"
+      },
+      {
+        "canonical_hex": "7b2261223a5b312c325d2c2262223a317d",
+        "canonical_text": "{\"a\":[1,2],\"b\":1}",
+        "result": "accept"
+      }
+    ],
+    "all_equal": true,
+    "all_distinct": false
+  }
+}

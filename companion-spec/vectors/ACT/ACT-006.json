@@ -1,0 +1,229 @@
+{
+  "id": "ACT-006",
+  "group": "ACT",
+  "required_minimum": false,
+  "description": "Same evidence presented twice",
+  "object": "evidence",
+  "alg": "sha-256",
+  "input": {
+    "presentations": [
+      "a801000268776562617574686e03582f000000077368612d323536000000204cdaf3b07b789064ebbf3fcd0dc858db668db199b3f7375f9af6cb3c63d41b1d0450c7ed0001c7ed0001c7ed0001c7ed0001055825f73c75fe031c8de384f8c469aca2c819377bfa65077a78f15d42b2ddd1a36b11050000000606588f7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a22544e727a734874346b475472767a5f4e446368593232614e735a6d7a397a64666d76624c50475055477830222c226f726967696e223a2268747470733a2f2f70726f78792e6578616d706c652e696e7465726e616c222c2263726f73734f726967696e223a66616c73657d0758483046022100ae217e53eff0006ffe7ee31432da33a2e67e69aa90ea1c5b3b68bb4e3f7c3d7d022100f8facdece0110cf0ea27b20246ac37c096fa8f1653ce2164fc9f7e252497f9c80a59014000010000001e68747470733a2f2f70726f78792e6578616d706c652e696e7465726e616c000200000010000102030405060708090a0b0c0d0e0f0003000000080000000000000007000400000076000000036f63690000006b72656769737472792e6578616d706c652e696e7465726e616c2f6d63702f66696c6573407368613235363a61626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162000500000009726561645f66696c6500060000002f000000077368612d3235360000002053643808d681a33ef53ed6ca5c4a2dc42c736ff3e4674fe09b80cc70a45651ad0007000000167b2270617468223a227372632f6d61696e2e7079227d000800000008000001a0c4506c00000900000008000001a0c45240c0",
+      "a801000268776562617574686e03582f000000077368612d323536000000204cdaf3b07b789064ebbf3fcd0dc858db668db199b3f7375f9af6cb3c63d41b1d0450c7ed0001c7ed0001c7ed0001c7ed0001055825f73c75fe031c8de384f8c469aca2c819377bfa65077a78f15d42b2ddd1a36b11050000000606588f7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a22544e727a734874346b475472767a5f4e446368593232614e735a6d7a397a64666d76624c50475055477830222c226f726967696e223a2268747470733a2f2f70726f78792e6578616d706c652e696e7465726e616c222c2263726f73734f726967696e223a66616c73657d0758483046022100ae217e53eff0006ffe7ee31432da33a2e67e69aa90ea1c5b3b68bb4e3f7c3d7d022100f8facdece0110cf0ea27b20246ac37c096fa8f1653ce2164fc9f7e252497f9c80a59014000010000001e68747470733a2f2f70726f78792e6578616d706c652e696e7465726e616c000200000010000102030405060708090a0b0c0d0e0f0003000000080000000000000007000400000076000000036f63690000006b72656769737472792e6578616d706c652e696e7465726e616c2f6d63702f66696c6573407368613235363a61626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162000500000009726561645f66696c6500060000002f000000077368612d3235360000002053643808d681a33ef53ed6ca5c4a2dc42c736ff3e4674fe09b80cc70a45651ad0007000000167b2270617468223a227372632f6d61696e2e7079227d000800000008000001a0c4506c00000900000008000001a0c45240c0"
+    ]
+  },
+  "context": {
+    "now": 1790000060000,
+    "proxy_id": "https://proxy.example.internal",
+    "open_sessions": [
+      "000102030405060708090a0b0c0d0e0f",
+      "101112131415161718191a1b1c1d1e1f"
+    ],
+    "request_session": "000102030405060708090a0b0c0d0e0f",
+    "pending": [
+      {
+        "session": "000102030405060708090a0b0c0d0e0f",
+        "sequence": 7,
+        "digest_ref_hex": "000000077368612d323536000000204cdaf3b07b789064ebbf3fcd0dc858db668db199b3f7375f9af6cb3c63d41b1d"
+      }
+    ],
+    "current_fingerprints": [
+      {
+        "server": {
+          "kind": "oci",
+          "id": "registry.example.internal/mcp/files@sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "name": "read_file",
+        "fingerprint": "sha-256:U2Q4CNaBoz71PtbKXEotxCxzb_PkZ0_gm4DMcKRWUa0"
+      },
+      {
+        "server": {
+          "kind": "oci",
+          "id": "registry.example.internal/mcp/files@sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "name": "write_file",
+        "fingerprint": "sha-256:wQCg-vu5dXBgWb0NWB1qU0sFYVkMzY5JkvBLUvWdceQ"
+      }
+    ],
+    "tool_classes": {
+      "read_file": "read",
+      "write_file": "write",
+      "admin_reset": "admin",
+      "run_shell": "admin"
+    },
+    "credentials": [
+      {
+        "id_hex": "c7ed0001c7ed0001c7ed0001c7ed0001",
+        "approver": "alice@example.internal",
+        "user_handle_hex": "75736572616c696365",
+        "be": false,
+        "counter": 5,
+        "classes": [
+          "read",
+          "write"
+        ],
+        "revoked": false,
+        "cose_key": {
+          "kty": 2,
+          "crv": 1,
+          "alg": -7,
+          "x_hex": "27c8a7c56a8b12cc1f06072a1d134ad2b48360cd454f96e71ab40bc8cbcfac7c",
+          "y_hex": "da04d945b7d2cf50da07cc923dddeb89d9925330f99f7759df2a50d12a492864"
+        }
+      },
+      {
+        "id_hex": "c7ed0002c7ed0002c7ed0002c7ed0002",
+        "approver": "alice@example.internal",
+        "user_handle_hex": "75736572616c696365",
+        "be": false,
+        "counter": 5,
+        "classes": [
+          "read",
+          "write"
+        ],
+        "revoked": false,
+        "cose_key": {
+          "kty": 1,
+          "crv": 6,
+          "alg": -8,
+          "x_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+        }
+      },
+      {
+        "id_hex": "b0b00001b0b00001b0b00001b0b00001",
+        "approver": "bob@example.internal",
+        "user_handle_hex": "75736572626f62",
+        "be": false,
+        "counter": 5,
+        "classes": [
+          "read",
+          "write"
+        ],
+        "revoked": false,
+        "cose_key": {
+          "kty": 2,
+          "crv": 1,
+          "alg": -7,
+          "x_hex": "27c8a7c56a8b12cc1f06072a1d134ad2b48360cd454f96e71ab40bc8cbcfac7c",
+          "y_hex": "da04d945b7d2cf50da07cc923dddeb89d9925330f99f7759df2a50d12a492864"
+        }
+      },
+      {
+        "id_hex": "d4e10001d4e10001d4e10001d4e10001",
+        "approver": "alice@example.internal",
+        "user_handle_hex": "75736572616c696365",
+        "be": false,
+        "counter": 5,
+        "classes": [
+          "read",
+          "write"
+        ],
+        "revoked": false,
+        "cose_key": {
+          "kty": 2,
+          "crv": 1,
+          "alg": -7,
+          "x_hex": "c076f7f37577f43a2a6118ef1b722759acbab6f6f5f902c10c949db045feef23",
+          "y_hex": "ba4601948dcb4b52fd5f741c9a711408a229b13c27b899f2213d9139a630aa01"
+        }
+      }
+    ],
+    "rp_id": "proxy.example.internal",
+    "allowed_origins": [
+      "https://proxy.example.internal"
+    ],
+    "forbid_synced": false,
+    "accept_rs256": false
+  },
+  "test_keys": {
+    "es256": {
+      "cose_key": {
+        "kty": 2,
+        "crv": 1,
+        "alg": -7,
+        "x_hex": "27c8a7c56a8b12cc1f06072a1d134ad2b48360cd454f96e71ab40bc8cbcfac7c",
+        "y_hex": "da04d945b7d2cf50da07cc923dddeb89d9925330f99f7759df2a50d12a492864"
+      },
+      "private_scalar_hex": "ac6b28112e8059895f81273122b4074f4ff268a252bba6fa3721303fb24b946a",
+      "derivation": "d = SHA-256(\"aab-00 test key: approver es256\") mod (n - 1) + 1",
+      "use": "approver credential c7ed0001..., WebAuthn (DER signatures)"
+    },
+    "device": {
+      "cose_key": {
+        "kty": 2,
+        "crv": 1,
+        "alg": -7,
+        "x_hex": "c076f7f37577f43a2a6118ef1b722759acbab6f6f5f902c10c949db045feef23",
+        "y_hex": "ba4601948dcb4b52fd5f741c9a711408a229b13c27b899f2213d9139a630aa01"
+      },
+      "private_scalar_hex": "6382a2c1fd04738f556db6ad821d79dc44fba046730ab93b8dc29cf87266feae",
+      "derivation": "d = SHA-256(\"aab-00 test key: device-key es256\") mod (n - 1) + 1",
+      "use": "device-key credential d4e10001..., COSE_Sign1 (raw r||s)"
+    },
+    "log": {
+      "cose_key": {
+        "kty": 2,
+        "crv": 1,
+        "alg": -7,
+        "x_hex": "392cac5e9c8ad767c2f779e5c82f812605cdc0f41ac46e6317103a41869e681d",
+        "y_hex": "6e7365f49ee6f549b7cfdbded80d80600256af0a5cdddb274914887f5fcd19b1"
+      },
+      "private_scalar_hex": "ce5e44ddb580ad09d4ad7194f0dc1255b916b87f0ccffda43d58dd1be933c59a",
+      "derivation": "d = SHA-256(\"aab-00 test key: log checkpoint es256\") mod (n - 1) + 1",
+      "use": "log writer checkpoint key, COSE_Sign1 (raw r||s)"
+    },
+    "ed25519": {
+      "cose_key": {
+        "kty": 1,
+        "crv": 6,
+        "alg": -8,
+        "x_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+      },
+      "private_seed_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+      "derivation": "RFC 8032 section 7.1 TEST 1",
+      "use": "approver credential c7ed0002..."
+    },
+    "ed448": {
+      "cose_key": {
+        "kty": 1,
+        "crv": 7,
+        "alg": -8,
+        "x_hex": "c442de5731c7c5ee3b65ca008ee5fbc98b664e16ae85180ce40fd54117da7f2f660437f84e90acc23f187bd3c861ec5520f4251b865a3fdc80"
+      },
+      "private_seed_hex": "a7c9b3deb6b45a146d42d40b7e8638c82539b835a0d79e54a95bdb6ae8750330d5a8282c1cf8fb326d68f8269544c9648c1edd79c1fbf2f68a",
+      "derivation": "SHA-512(\"aab-00 test key: ed448 (WA-027)\")[:57]",
+      "use": "WA-027 only (must be rejected: -8 is restricted to Ed25519)"
+    }
+  },
+  "test_keys_note": "All keys are fixed TEST keys, published here on purpose; ECDSA signatures use RFC 6979 deterministic nonces.",
+  "requires": [
+    "crypto"
+  ],
+  "precheck": {
+    "stdlib": {
+      "result": "needs-crypto",
+      "presentations": [
+        {
+          "result": "needs-crypto"
+        },
+        {
+          "result": "needs-crypto"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "presentations": [
+      {
+        "result": "accept"
+      },
+      {
+        "result": "reject",
+        "error": "E_REPLAY"
+      }
+    ]
+  },
+  "note": "The first presentation verifies and consumes the pending entry; the second fails at step 3."
+}

@@ -1,0 +1,22 @@
+{
+  "id": "ACT-014",
+  "group": "ACT",
+  "required_minimum": false,
+  "description": "Mcp-Name header differs from params.name",
+  "object": "request",
+  "alg": "sha-256",
+  "input": {
+    "body_json_text": "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"name\":\"read_file\",\"arguments\":{\"path\":\"src/main.py\"}}}",
+    "headers": {
+      "Mcp-Method": "tools/call",
+      "Mcp-Name": "write_file"
+    }
+  },
+  "proxy_only": true,
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_HEADER_MISMATCH"
+  }
+}

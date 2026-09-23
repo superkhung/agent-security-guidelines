@@ -1,0 +1,14 @@
+{
+  "id": "ENC-001",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "NFC string caf\u00e9 (U+00E9)",
+  "object": "string",
+  "alg": "sha-256",
+  "input_hex": "636166c3a9",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "accept"
+  }
+}

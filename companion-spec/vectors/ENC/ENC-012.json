@@ -1,0 +1,17 @@
+{
+  "id": "ENC-012",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Key ordering with non-BMP characters (UTF-16 code unit order)",
+  "object": "json",
+  "alg": "sha-256",
+  "input_json_text": "{\"\\uff21\":2,\"\\ud83d\\ude00\":1,\"a\":0}",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "canonical_hex": "7b2261223a302c22f09f9880223a312c22efbca1223a327d",
+    "canonical_text": "{\"a\":0,\"\ud83d\ude00\":1,\"\uff21\":2}",
+    "result": "accept"
+  },
+  "note": "U+1F600 (UTF-16 D83D DE00) sorts before U+FF21 by code units, after it by code points."
+}

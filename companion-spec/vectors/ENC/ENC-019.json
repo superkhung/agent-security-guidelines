@@ -1,0 +1,82 @@
+{
+  "id": "ENC-019",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Field present with empty value (description \"\") vs field absent",
+  "object": "tool-fp",
+  "alg": "sha-256",
+  "input": {
+    "cases": [
+      {
+        "server": {
+          "kind": "oci",
+          "id": "registry.example.internal/mcp/files@sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "tool": {
+          "name": "read_file",
+          "title": "Read file",
+          "description": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false
+          }
+        }
+      },
+      {
+        "server": {
+          "kind": "oci",
+          "id": "registry.example.internal/mcp/files@sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "tool": {
+          "name": "read_file",
+          "title": "Read file",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false
+          }
+        }
+      }
+    ]
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "accept",
+    "cases": [
+      {
+        "digest": "sha-256:vG2Ba33Fb1jRUwzQz7bOiz_1X-ryVbRNwhwc-mLfvOw",
+        "record_hex": "000100000076000000036f63690000006b72656769737472792e6578616d706c652e696e7465726e616c2f6d63702f66696c6573407368613235363a61626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162000200000009726561645f66696c65000300000009526561642066696c6500040000000000050000004d7b2270726f70657274696573223a7b2270617468223a7b2274797065223a22737472696e67227d7d2c227265717569726564223a5b2270617468225d2c2274797065223a226f626a656374227d00070000002d7b22646573747275637469766548696e74223a66616c73652c22726561644f6e6c7948696e74223a747275657d",
+        "result": "accept"
+      },
+      {
+        "digest": "sha-256:Cs70Epc5IkFpzi1qSE85GDP0IHrfWvPuV-E3T9Shxtg",
+        "record_hex": "000100000076000000036f63690000006b72656769737472792e6578616d706c652e696e7465726e616c2f6d63702f66696c6573407368613235363a61626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162000200000009726561645f66696c65000300000009526561642066696c6500050000004d7b2270726f70657274696573223a7b2270617468223a7b2274797065223a22737472696e67227d7d2c227265717569726564223a5b2270617468225d2c2274797065223a226f626a656374227d00070000002d7b22646573747275637469766548696e74223a66616c73652c22726561644f6e6c7948696e74223a747275657d",
+        "result": "accept"
+      }
+    ],
+    "all_equal": false,
+    "all_distinct": true
+  }
+}

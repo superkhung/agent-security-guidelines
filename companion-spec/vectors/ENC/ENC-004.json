@@ -1,0 +1,15 @@
+{
+  "id": "ENC-004",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "String containing U+0000",
+  "object": "string",
+  "alg": "sha-256",
+  "input_hex": "610062",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_BAD_UTF8"
+  }
+}

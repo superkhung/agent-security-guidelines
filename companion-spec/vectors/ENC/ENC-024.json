@@ -1,0 +1,15 @@
+{
+  "id": "ENC-024",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "String containing U+0378 (unassigned in Unicode 16.0.0)",
+  "object": "string",
+  "alg": "sha-256",
+  "input_hex": "61cdb8",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_NOT_NFC"
+  }
+}

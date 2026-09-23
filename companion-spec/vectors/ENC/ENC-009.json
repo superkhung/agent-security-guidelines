@@ -1,0 +1,15 @@
+{
+  "id": "ENC-009",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Unpaired surrogate escape",
+  "object": "json",
+  "alg": "sha-256",
+  "input_json_text": "\"\\uD800\"",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_BAD_UTF8"
+  }
+}

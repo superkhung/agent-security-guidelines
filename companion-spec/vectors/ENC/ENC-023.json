@@ -1,0 +1,18 @@
+{
+  "id": "ENC-023",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Digest reference with alg = sha-1",
+  "object": "digest-ref",
+  "alg": "sha-256",
+  "input": {
+    "ref_hex": "000000057368612d31000000140000000000000000000000000000000000000000",
+    "expected_alg": "sha-256"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_ALG_MISMATCH"
+  }
+}

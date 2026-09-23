@@ -1,0 +1,29 @@
+{
+  "id": "ACT-001",
+  "group": "ACT",
+  "required_minimum": false,
+  "description": "Baseline action (Appendix D.2 fields)",
+  "object": "action",
+  "alg": "sha-256",
+  "input": {
+    "audience": "https://proxy.example.internal",
+    "session_hex": "000102030405060708090a0b0c0d0e0f",
+    "sequence": 7,
+    "server": {
+      "kind": "oci",
+      "id": "registry.example.internal/mcp/files@sha256:abababababababababababababababababababababababababababababababab"
+    },
+    "name": "read_file",
+    "fingerprint": "sha-256:U2Q4CNaBoz71PtbKXEotxCxzb_PkZ0_gm4DMcKRWUa0",
+    "arguments_json_text": "{\"path\":\"src/main.py\"}",
+    "not_before": 1790000000000,
+    "not_after": 1790000120000
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "digest": "sha-256:TNrzsHt4kGTrvz_NDchY22aNsZmz9zdfmvbLPGPUGx0",
+    "record_hex": "00010000001e68747470733a2f2f70726f78792e6578616d706c652e696e7465726e616c000200000010000102030405060708090a0b0c0d0e0f0003000000080000000000000007000400000076000000036f63690000006b72656769737472792e6578616d706c652e696e7465726e616c2f6d63702f66696c6573407368613235363a61626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162000500000009726561645f66696c6500060000002f000000077368612d3235360000002053643808d681a33ef53ed6ca5c4a2dc42c736ff3e4674fe09b80cc70a45651ad0007000000167b2270617468223a227372632f6d61696e2e7079227d000800000008000001a0c4506c00000900000008000001a0c45240c0",
+    "result": "accept"
+  }
+}

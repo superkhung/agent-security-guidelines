@@ -195,7 +195,7 @@ Tool schemas, annotations and tool arguments are JSON. They are included in dige
 
 | Condition | Error |
 | :--- | :--- |
-| An object has two members whose names are equal after unescaping (for example `"a"` and `"a"`) | `E_DUP_KEY` |
+| An object has two members whose names are equal after unescaping (for example `"a"` and `"\u0061"`) | `E_DUP_KEY` |
 | A string (member name or value), after unescaping, is not in NFC or contains an unassigned code point (Section 4.1) | `E_NOT_NFC` |
 | A string contains an unpaired surrogate escape (`"\uD800"`) or U+0000 (`"\u0000"`) | `E_BAD_UTF8` |
 | The decimal value of a number differs from the decimal value of its RFC 8785 serialization (for example 2^53 + 1, which serializes as `9007199254740992`), or the number overflows binary64 (for example `1e400`) | `E_NUMBER` |
@@ -854,7 +854,7 @@ Additions not listed in Phụ lục E, proposed by this draft: tagged records wi
 | ENC-004 | String containing U+0000 | reject `E_BAD_UTF8` |
 | ENC-005 ★ | JSON object with duplicate key at top level `{"a":1,"a":2}` | reject `E_DUP_KEY` |
 | ENC-006 ★ | Duplicate key in a nested object | reject `E_DUP_KEY` |
-| ENC-007 | Keys equal after unescaping: `{"a":1,"a":2}` | reject `E_DUP_KEY` |
+| ENC-007 | Keys equal after unescaping: `{"a":1,"\u0061":2}` | reject `E_DUP_KEY` |
 | ENC-008 | Member name in NFD | reject `E_NOT_NFC` |
 | ENC-009 | Unpaired surrogate escape `"\uD800"` | reject `E_BAD_UTF8` |
 | ENC-010 | Integer 9007199254740993 (2^53 + 1) | reject `E_NUMBER` |
