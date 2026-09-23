@@ -14,6 +14,7 @@ Tác giả: superkhung · VNSecurity
 guideline/        Guideline, bản gốc (tiếng Việt)
 TOOLS.md          Bản sống của bảng công cụ ở Mục 5.1; khi lệch với guideline, tin file này
 playbooks/        Playbook sự cố, break-glass và kịch bản diễn tập cho OBS-06
+checks/           Script chạy tự động phép kiểm chứng của ASAL-0 và phần máy trạm của ASAL-1
 companion-spec/   Agent Action Binding: Wire Format and Test Vectors (tiếng Anh, bản nháp aab-00)
 pdf/              Công cụ xuất PDF
 ```
@@ -25,6 +26,8 @@ pdf/              Công cụ xuất PDF
 - Dev dùng Claude Code, Cursor, Codex: Phụ lục A (quick start ASAL-0 trong một buổi), rồi Mục 3.1 để chọn cấp cho use case.
 - Security engineer, platform: Mục 1, Mục 2, rồi toàn bộ Mục 4.
 - Trưởng nhóm, CISO: Mục 1.2 và Mục 3, nhất là 3.3.
+
+Đã áp Phụ lục A hay các control của ASAL-1 rồi? Chạy [`checks/asal_check.py`](checks/README.md) bên trong môi trường của agent để xem phép kiểm chứng có đạt thật không.
 
 ## Góp ý
 
