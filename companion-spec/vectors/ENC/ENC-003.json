@@ -1,0 +1,15 @@
+{
+  "id": "ENC-003",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Overlong UTF-8 encoding of '/' (0xC0 0xAF)",
+  "object": "string",
+  "alg": "sha-256",
+  "input_hex": "c0af",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_BAD_UTF8"
+  }
+}

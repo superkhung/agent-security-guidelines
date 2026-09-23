@@ -1,0 +1,18 @@
+{
+  "id": "ENC-017",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "One trailing byte after last field",
+  "object": "record",
+  "alg": "sha-256",
+  "input": {
+    "record_type": "checkpoint",
+    "record_hex": "00010000001000000000000000000000000000000000000200000008000000000000000000030000002f000000077368612d32353600000020434ce678168158bb6e8518fd13bac9c9042e4d5bbdfc340d4a70c6fbe031fe1a000400000008000001a0c4506c0000"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_LENGTH"
+  }
+}

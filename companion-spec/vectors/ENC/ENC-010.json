@@ -1,0 +1,15 @@
+{
+  "id": "ENC-010",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Integer 2^53 + 1",
+  "object": "json",
+  "alg": "sha-256",
+  "input_json_text": "9007199254740993",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_NUMBER"
+  }
+}

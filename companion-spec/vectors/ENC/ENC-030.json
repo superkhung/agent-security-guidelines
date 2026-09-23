@@ -1,0 +1,17 @@
+{
+  "id": "ENC-030",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Server identity whose lp() values leave 2 bytes unused",
+  "object": "server-identity",
+  "alg": "sha-256",
+  "input": {
+    "identity_hex": "000000036f63690000006b72656769737472792e6578616d706c652e696e7465726e616c2f6d63702f66696c6573407368613235363a616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261620000"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_LENGTH"
+  }
+}

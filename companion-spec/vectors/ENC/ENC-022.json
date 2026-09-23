@@ -1,0 +1,18 @@
+{
+  "id": "ENC-022",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Digest reference with sha-256 and a 31-byte digest",
+  "object": "digest-ref",
+  "alg": "sha-256",
+  "input": {
+    "ref_hex": "000000077368612d3235360000001f00000000000000000000000000000000000000000000000000000000000000",
+    "expected_alg": "sha-256"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_LENGTH"
+  }
+}

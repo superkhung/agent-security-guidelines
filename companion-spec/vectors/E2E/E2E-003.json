@@ -1,0 +1,12 @@
+{
+  "id": "E2E-003",
+  "group": "E2E",
+  "required_minimum": false,
+  "description": "As E2E-001, the same approval evidence presented again for a retry",
+  "object": null,
+  "alg": "sha-256",
+  "expected": {
+    "status": "pending"
+  },
+  "note": "needs crypto backend: requires a real WebAuthn assertion and a signed checkpoint. Expected: second presentation rejected E_REPLAY; both logged."
+}

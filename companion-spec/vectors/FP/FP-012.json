@@ -1,0 +1,39 @@
+{
+  "id": "FP-012",
+  "group": "FP",
+  "required_minimum": false,
+  "description": "url identities differing only in host case and default port",
+  "object": "server-identity",
+  "alg": "sha-256",
+  "input": {
+    "cases": [
+      {
+        "kind": "url",
+        "id": "https://MCP.Example:443/mcp"
+      },
+      {
+        "kind": "url",
+        "id": "https://mcp.example/mcp"
+      }
+    ]
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "accept",
+    "cases": [
+      {
+        "identity_hex": "0000000375726c0000001768747470733a2f2f6d63702e6578616d706c652f6d6370",
+        "id": "https://mcp.example/mcp",
+        "result": "accept"
+      },
+      {
+        "identity_hex": "0000000375726c0000001768747470733a2f2f6d63702e6578616d706c652f6d6370",
+        "id": "https://mcp.example/mcp",
+        "result": "accept"
+      }
+    ],
+    "all_equal": true,
+    "all_distinct": false
+  }
+}

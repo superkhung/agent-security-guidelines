@@ -1,0 +1,23 @@
+{
+  "id": "FP-009",
+  "group": "FP",
+  "required_minimum": false,
+  "description": "inputSchema with members in different order",
+  "object": "tool-fp",
+  "alg": "sha-256",
+  "input": {
+    "server": {
+      "kind": "oci",
+      "id": "registry.example.internal/mcp/files@sha256:abababababababababababababababababababababababababababababababab"
+    },
+    "tool_json_text": "{\"annotations\":{\"destructiveHint\":false,\"readOnlyHint\":true},\"outputSchema\":{\"required\":[\"content\"],\"type\":\"object\",\"properties\":{\"content\":{\"type\":\"string\"}}},\"inputSchema\": {\"required\": [\"path\"], \"properties\": {\"path\": {\"type\": \"string\"}}, \"type\": \"object\"},\"description\":\"Read a UTF-8 text file inside the workspace.\",\"title\":\"Read file\",\"name\":\"read_file\"}"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "same_as": "FP-001",
+    "digest": "sha-256:khP2zKiEbzkgiyuV6aTYIJ0IRAvydQmkLl0319o9QXQ",
+    "record_hex": "000100000076000000036f63690000006b72656769737472792e6578616d706c652e696e7465726e616c2f6d63702f66696c6573407368613235363a61626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162000200000009726561645f66696c65000300000009526561642066696c6500040000002c526561642061205554462d3820746578742066696c6520696e736964652074686520776f726b73706163652e00050000004d7b2270726f70657274696573223a7b2270617468223a7b2274797065223a22737472696e67227d7d2c227265717569726564223a5b2270617468225d2c2274797065223a226f626a656374227d0006000000537b2270726f70657274696573223a7b22636f6e74656e74223a7b2274797065223a22737472696e67227d7d2c227265717569726564223a5b22636f6e74656e74225d2c2274797065223a226f626a656374227d00070000002d7b22646573747275637469766548696e74223a66616c73652c22726561644f6e6c7948696e74223a747275657d",
+    "result": "accept"
+  }
+}

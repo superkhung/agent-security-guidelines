@@ -1,0 +1,107 @@
+{
+  "id": "WA-021",
+  "group": "WA",
+  "required_minimum": false,
+  "description": "RS256 credential, verifier configured without RS256",
+  "object": "evidence",
+  "alg": "sha-256",
+  "input": {
+    "evidence_hex": "a801000268776562617574686e03582f000000077368612d323536000000204cdaf3b07b789064ebbf3fcd0dc858db668db199b3f7375f9af6cb3c63d41b1d0450c7ed0001c7ed0001c7ed0001c7ed0001055825f73c75fe031c8de384f8c469aca2c819377bfa65077a78f15d42b2ddd1a36b11050000000606588f7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a22544e727a734874346b475472767a5f4e446368593232614e735a6d7a397a64666d76624c50475055477830222c226f726967696e223a2268747470733a2f2f70726f78792e6578616d706c652e696e7465726e616c222c2263726f73734f726967696e223a66616c73657d07590100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a59014000010000001e68747470733a2f2f70726f78792e6578616d706c652e696e7465726e616c000200000010000102030405060708090a0b0c0d0e0f0003000000080000000000000007000400000076000000036f63690000006b72656769737472792e6578616d706c652e696e7465726e616c2f6d63702f66696c6573407368613235363a61626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162000500000009726561645f66696c6500060000002f000000077368612d3235360000002053643808d681a33ef53ed6ca5c4a2dc42c736ff3e4674fe09b80cc70a45651ad0007000000167b2270617468223a227372632f6d61696e2e7079227d000800000008000001a0c4506c00000900000008000001a0c45240c0"
+  },
+  "context": {
+    "now": 1790000060000,
+    "proxy_id": "https://proxy.example.internal",
+    "open_sessions": [
+      "000102030405060708090a0b0c0d0e0f",
+      "101112131415161718191a1b1c1d1e1f"
+    ],
+    "request_session": "000102030405060708090a0b0c0d0e0f",
+    "pending": [
+      {
+        "session": "000102030405060708090a0b0c0d0e0f",
+        "sequence": 7,
+        "digest_ref_hex": "000000077368612d323536000000204cdaf3b07b789064ebbf3fcd0dc858db668db199b3f7375f9af6cb3c63d41b1d"
+      }
+    ],
+    "current_fingerprints": [
+      {
+        "server": {
+          "kind": "oci",
+          "id": "registry.example.internal/mcp/files@sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "name": "read_file",
+        "fingerprint": "sha-256:U2Q4CNaBoz71PtbKXEotxCxzb_PkZ0_gm4DMcKRWUa0"
+      },
+      {
+        "server": {
+          "kind": "oci",
+          "id": "registry.example.internal/mcp/files@sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "name": "write_file",
+        "fingerprint": "sha-256:wQCg-vu5dXBgWb0NWB1qU0sFYVkMzY5JkvBLUvWdceQ"
+      }
+    ],
+    "tool_classes": {
+      "read_file": "read",
+      "write_file": "write",
+      "admin_reset": "admin",
+      "run_shell": "admin"
+    },
+    "credentials": [
+      {
+        "id_hex": "c7ed0001c7ed0001c7ed0001c7ed0001",
+        "approver": "alice@example.internal",
+        "user_handle_hex": "75736572616c696365",
+        "be": false,
+        "counter": 5,
+        "classes": [
+          "read",
+          "write"
+        ],
+        "revoked": false,
+        "cose_key": {
+          "kty": 3,
+          "alg": -257,
+          "n_hex": "c0416e7d4964c2e9b13bea5e06d815aec452f2407f479f6529a638b59a895f787ecaaa7640b41c4c7a2678b23137bcf18560a69563969073a6843eba25fb7b65e6416e7d4964c2e9b13bea5e06d815aec452f2407f479f6529a638b59a895f787ecaaa7640b41c4c7a2678b23137bcf18560a69563969073a6843eba25fb7b65e6416e7d4964c2e9b13bea5e06d815aec452f2407f479f6529a638b59a895f787ecaaa7640b41c4c7a2678b23137bcf18560a69563969073a6843eba25fb7b65e6416e7d4964c2e9b13bea5e06d815aec452f2407f479f6529a638b59a895f787ecaaa7640b41c4c7a2678b23137bcf18560a69563969073a6843eba25fb7b65",
+          "e_hex": "010001"
+        }
+      }
+    ],
+    "rp_id": "proxy.example.internal",
+    "allowed_origins": [
+      "https://proxy.example.internal"
+    ],
+    "forbid_synced": false,
+    "accept_rs256": false
+  },
+  "test_keys": {
+    "es256": {
+      "cose_key": {
+        "kty": 2,
+        "crv": 1,
+        "alg": -7,
+        "x_hex": "6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296",
+        "y_hex": "4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5"
+      },
+      "private_scalar_hex": "0000000000000000000000000000000000000000000000000000000000000001",
+      "note": "P-256 private key d = 1 (public key = generator G). Test only."
+    },
+    "ed25519": {
+      "cose_key": {
+        "kty": 1,
+        "crv": 6,
+        "alg": -8,
+        "x_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+      },
+      "private_seed_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+      "note": "RFC 8032 section 7.1 TEST 1. Test only."
+    }
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_WA_SIGNATURE"
+  },
+  "note": "Rejected at step 7 by the algorithm policy before any signature arithmetic; the RSA modulus and signature are placeholders."
+}

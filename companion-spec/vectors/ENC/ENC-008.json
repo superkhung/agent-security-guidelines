@@ -1,0 +1,15 @@
+{
+  "id": "ENC-008",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Member name in NFD",
+  "object": "json",
+  "alg": "sha-256",
+  "input_hex": "7b2263616665cc81223a317d",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_NOT_NFC"
+  }
+}

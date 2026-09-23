@@ -1,0 +1,39 @@
+{
+  "id": "FP-013",
+  "group": "FP",
+  "required_minimum": false,
+  "description": "url identities differing in path case",
+  "object": "server-identity",
+  "alg": "sha-256",
+  "input": {
+    "cases": [
+      {
+        "kind": "url",
+        "id": "https://mcp.example/MCP"
+      },
+      {
+        "kind": "url",
+        "id": "https://mcp.example/mcp"
+      }
+    ]
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "accept",
+    "cases": [
+      {
+        "identity_hex": "0000000375726c0000001768747470733a2f2f6d63702e6578616d706c652f4d4350",
+        "id": "https://mcp.example/MCP",
+        "result": "accept"
+      },
+      {
+        "identity_hex": "0000000375726c0000001768747470733a2f2f6d63702e6578616d706c652f6d6370",
+        "id": "https://mcp.example/mcp",
+        "result": "accept"
+      }
+    ],
+    "all_equal": false,
+    "all_distinct": true
+  }
+}

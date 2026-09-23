@@ -1,0 +1,18 @@
+{
+  "id": "FP-018",
+  "group": "FP",
+  "required_minimum": false,
+  "description": "url identity with a query",
+  "object": "server-identity",
+  "alg": "sha-256",
+  "input": {
+    "kind": "url",
+    "id": "https://mcp.example/?b=2&a=1"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_VALUE"
+  }
+}

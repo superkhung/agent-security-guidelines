@@ -1,0 +1,15 @@
+{
+  "id": "ENC-026",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Number 1e400",
+  "object": "json",
+  "alg": "sha-256",
+  "input_json_text": "1e400",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_NUMBER"
+  }
+}

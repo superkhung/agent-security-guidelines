@@ -1,0 +1,18 @@
+{
+  "id": "FP-019",
+  "group": "FP",
+  "required_minimum": false,
+  "description": "url identity with scheme http",
+  "object": "server-identity",
+  "alg": "sha-256",
+  "input": {
+    "kind": "url",
+    "id": "http://mcp.example/"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_VALUE"
+  }
+}

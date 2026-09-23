@@ -1,0 +1,15 @@
+{
+  "id": "ENC-002",
+  "group": "ENC",
+  "required_minimum": true,
+  "description": "NFD string caf\u00e9 (U+0065 U+0301)",
+  "object": "string",
+  "alg": "sha-256",
+  "input_hex": "63616665cc81",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_NOT_NFC"
+  }
+}

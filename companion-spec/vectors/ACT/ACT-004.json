@@ -1,0 +1,17 @@
+{
+  "id": "ACT-004",
+  "group": "ACT",
+  "required_minimum": true,
+  "description": "Argument path caf\u00e9 in NFD",
+  "object": "request",
+  "alg": "sha-256",
+  "input": {
+    "body_hex": "7b226a736f6e727063223a22322e30222c226964223a34322c226d6574686f64223a22746f6f6c732f63616c6c222c22706172616d73223a7b226e616d65223a22726561645f66696c65222c22617267756d656e7473223a7b2270617468223a2263616665cc812e747874227d7d7d"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_NOT_NFC"
+  }
+}

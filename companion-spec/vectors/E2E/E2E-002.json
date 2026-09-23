@@ -1,0 +1,12 @@
+{
+  "id": "E2E-002",
+  "group": "E2E",
+  "required_minimum": false,
+  "description": "As E2E-001, server changes description between approval and call",
+  "object": null,
+  "alg": "sha-256",
+  "expected": {
+    "status": "pending"
+  },
+  "note": "needs crypto backend: requires a real WebAuthn assertion and a signed checkpoint. Expected: call rejected E_FP_CHANGED; decision logged as 6."
+}

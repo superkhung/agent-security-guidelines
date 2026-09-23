@@ -1,0 +1,15 @@
+{
+  "id": "ENC-006",
+  "group": "ENC",
+  "required_minimum": true,
+  "description": "Duplicate key in a nested object",
+  "object": "json",
+  "alg": "sha-256",
+  "input_json_text": "{\"x\":{\"a\":1,\"a\":2}}",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_DUP_KEY"
+  }
+}

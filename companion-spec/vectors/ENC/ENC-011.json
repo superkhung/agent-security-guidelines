@@ -1,0 +1,16 @@
+{
+  "id": "ENC-011",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "-0",
+  "object": "json",
+  "alg": "sha-256",
+  "input_json_text": "-0",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "canonical_hex": "30",
+    "canonical_text": "0",
+    "result": "accept"
+  }
+}

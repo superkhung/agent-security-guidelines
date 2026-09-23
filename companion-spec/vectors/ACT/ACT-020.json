@@ -1,0 +1,17 @@
+{
+  "id": "ACT-020",
+  "group": "ACT",
+  "required_minimum": false,
+  "description": "Duplicate name member in params of the agent's request",
+  "object": "request",
+  "alg": "sha-256",
+  "input": {
+    "body_json_text": "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"name\":\"read_file\",\"name\":\"write_file\",\"arguments\":{\"path\":\"src/main.py\"}}}"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_DUP_KEY"
+  }
+}

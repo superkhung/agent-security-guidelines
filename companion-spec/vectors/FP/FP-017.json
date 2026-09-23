@@ -1,0 +1,18 @@
+{
+  "id": "FP-017",
+  "group": "FP",
+  "required_minimum": false,
+  "description": "url identity with userinfo",
+  "object": "server-identity",
+  "alg": "sha-256",
+  "input": {
+    "kind": "url",
+    "id": "https://user:pass@mcp.example/"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_VALUE"
+  }
+}

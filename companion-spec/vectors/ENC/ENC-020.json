@@ -1,0 +1,18 @@
+{
+  "id": "ENC-020",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Log record with record type 9",
+  "object": "record",
+  "alg": "sha-256",
+  "input": {
+    "record_type": "log",
+    "record_hex": "000100000010000000000000000000000000000000000002000000080000000000000000000300000008000001a0c4506c00000400000010000102030405060708090a0b0c0d0e0f000500000008000000000000000000060000000109"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_VALUE"
+  }
+}

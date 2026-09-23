@@ -1,0 +1,16 @@
+{
+  "id": "ENC-007",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "Keys equal after unescaping: a and \\u0061",
+  "object": "json",
+  "alg": "sha-256",
+  "input_json_text": "{\"a\":1,\"\\u0061\":2}",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_DUP_KEY"
+  },
+  "note": "The spec source gives this input as {\"a\":1,\"a\":2}, identical to ENC-005, although the case needs an escape. This file uses \\u0061."
+}

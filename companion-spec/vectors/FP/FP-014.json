@@ -1,0 +1,18 @@
+{
+  "id": "FP-014",
+  "group": "FP",
+  "required_minimum": false,
+  "description": "Fingerprint reference with sha-384 where sha-256 is expected",
+  "object": "digest-ref",
+  "alg": "sha-256",
+  "input": {
+    "ref_hex": "000000077368612d33383400000030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "expected_alg": "sha-256"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_ALG_MISMATCH"
+  }
+}

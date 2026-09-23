@@ -1,0 +1,15 @@
+{
+  "id": "ENC-027",
+  "group": "ENC",
+  "required_minimum": false,
+  "description": "JSON string \\u0000",
+  "object": "json",
+  "alg": "sha-256",
+  "input_json_text": "\"\\u0000\"",
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_BAD_UTF8"
+  }
+}
