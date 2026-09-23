@@ -1,0 +1,39 @@
+name: release
+
+# Push a tag vX.Y.Z whose version matches the guideline's "Phiên bản" row.
+# The workflow builds the PDF and attaches it to the GitHub Release for that tag,
+# creating a pre-release if none exists yet.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint, including tag and version match
+        run: python3 scripts/lint.py
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+      - run: scripts/ci-setup.sh
+      - run: python3 pdf/build.py
+      - name: Attach PDF to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          pdf=$(ls dist/*.pdf)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$pdf" --clobber
+          else
+            gh release create "$TAG" "$pdf" --prerelease --title "$TAG" \
+              --notes "Xem CHANGELOG.md để biết thay đổi trong bản này."
+          fi

@@ -50,7 +50,7 @@ brew install pandoc weasyprint && brew install --cask font-be-vietnam-pro font-j
 python3 pdf/build.py
 ```
 
-PDF được ghi vào `dist/agent-security-guidelines-v<phiên-bản>.pdf`. Thư mục `dist/` không được commit; PDF của mỗi phiên bản được đính kèm ở trang Releases.
+PDF được ghi vào `dist/agent-security-guidelines-v<phiên-bản>.pdf`. Thư mục `dist/` không được commit. Khi push tag `vX.Y.Z`, CI tự build PDF và đính kèm vào trang Releases.
 
 ## Giấy phép
 
