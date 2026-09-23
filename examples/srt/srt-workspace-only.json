@@ -1,0 +1,18 @@
+{
+  "network": {
+    "allowedDomains": [
+      "api.anthropic.com",
+      "registry.npmjs.org",
+      "pypi.org",
+      "files.pythonhosted.org"
+    ],
+    "deniedDomains": [],
+    "allowLocalBinding": false
+  },
+  "filesystem": {
+    "denyRead": ["~"],
+    "allowRead": ["."],
+    "allowWrite": [".", "/tmp"],
+    "denyWrite": [".env", ".mcp.json", ".claude", ".cursor", ".vscode", ".git/hooks"]
+  }
+}
