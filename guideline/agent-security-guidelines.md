@@ -725,9 +725,11 @@ Cạnh C của bộ ba nguy hiểm. Chặn được đường ra thì prompt inj
 
 Trên Linux và container: network namespace riêng chỉ nối tới proxy (bubblewrap/`srt` làm sẵn việc này), hoặc Kubernetes NetworkPolicy mặc định chặn cộng egress gateway; Cilium hỗ trợ policy theo FQDN. Trên macOS: `srt` giới hạn mạng của tiến trình về proxy local; các firewall dựa trên Network Extension (ví dụ LuLu, mã nguồn mở) cho khả năng nhìn thấy và chặn theo ứng dụng. `pf` không lọc được theo tiến trình nên không phù hợp. Trên Windows: rule outbound theo chương trình của Windows Firewall (chạy trên WFP), hoặc đưa agent vào WSL2/container để dùng cơ chế của Linux.
 
+"Không có đường nào ngoài proxy" phải đúng cho cả IPv6 và UDP, không chỉ cho TCP qua IPv4. Proxy kiểu CONNECT chỉ mang TCP, nên sandbox phải chặn toàn bộ UDP đi ra, kể cả UDP 443, nơi HTTP/3 (QUIC) đi thẳng ra ngoài nếu còn đường. DNS không cần UDP vì proxy tự phân giải (NET-02). IPv6 phải bị chặn giống IPv4, hoặc tắt hẳn trong sandbox nếu proxy chỉ phục vụ IPv4. Chỗ hay hở: rule firewall chỉ viết cho IPv4 (có `iptables` mà quên `ip6tables`, hoặc nftables chỉ có bảng `ip` mà không có `inet`); container chạy `--network host` trên máy có IPv6; Docker bật IPv6 cho network mà rule egress không bao IPv6.
+
 Bắt đầu bằng một tuần chế độ chỉ log để thu danh sách đích thật (registry package, API, tài liệu), rồi mới chuyển sang chặn.
 
-**Kiểm chứng.** Từ trong agent, `curl` tới một domain ngoài allowlist và tới một IP trần: cả hai phải bị chặn và có log.
+**Kiểm chứng.** Từ trong agent, `curl` tới một domain ngoài allowlist, tới một IP trần, và tới một địa chỉ IPv6 trần (`curl -6`): cả ba phải bị chặn và có log. Gửi một gói UDP ra ngoài (ví dụ `nc -u <ip> 443`, hoặc `curl --http3-only` nếu curl có HTTP/3) và kiểm tra ở phía nhận: không được có gói nào tới.
 
 **Bỏ qua khi.** Sandbox không có mạng hoàn toàn.
 
@@ -917,7 +919,7 @@ Agent bị prompt injection sẽ dùng được mọi credential nó chạm tớ
 
 **Tổ chức cần có.** Hạ tầng secret động (Vault/OpenBao dynamic secrets, STS của cloud, workload identity federation, SPIFFE/SPIRE).
 
-**Làm thế nào.** Tool hoặc gateway xin credential từ broker cho từng thao tác hoặc từng phiên ngắn. Đặt TTL ngắn vì một lý do hay bị bỏ qua: thu hồi ở identity provider thường chỉ chặn lần cấp tiếp theo, còn access token đã phát ra vẫn sống tới lúc hết hạn, trừ khi hệ thống đích kiểm lại trạng thái. TTL ngắn là thứ thật sự giới hạn cửa sổ rủi ro. Ở ASAL-3, nếu cả identity provider lẫn hệ thống đích hỗ trợ, OpenID Shared Signals Framework (với các profile CAEP và RISC) cho phép đẩy sự kiện thu hồi tới nơi dùng token thay vì chờ token hết hạn. Nó chỉ có tác dụng ở những hệ thống thật sự nhận và xử lý sự kiện, nên không thay được TTL ngắn.
+**Làm thế nào.** Tool hoặc gateway xin credential từ broker cho từng thao tác hoặc từng phiên ngắn. Đặt TTL ngắn vì một lý do hay bị bỏ qua: thu hồi ở identity provider thường chỉ chặn lần cấp tiếp theo, còn access token đã phát ra vẫn sống tới lúc hết hạn, trừ khi hệ thống đích kiểm lại trạng thái. TTL ngắn là thứ thật sự giới hạn cửa sổ rủi ro. Ở ASAL-3, nếu cả identity provider lẫn hệ thống đích hỗ trợ, OpenID Shared Signals Framework (với các profile CAEP và RISC) cho phép đẩy sự kiện thu hồi tới nơi dùng token thay vì chờ token hết hạn. Nó chỉ có tác dụng ở những hệ thống thật sự nhận và xử lý sự kiện, nên không thay được TTL ngắn. Điều này đặc biệt đúng với access token dạng JWT mà hệ thống đích kiểm chữ ký tại chỗ, không gọi introspection: những hệ thống đó chấp nhận token tới đúng thời điểm `exp`, dù identity provider đã thu hồi hay đã phát sự kiện, nên với chúng, TTL là chốt chặn duy nhất.
 
 **Kiểm chứng.** Đo thời gian từ lúc thu hồi tới lúc một request dùng credential đó bị từ chối.
 
@@ -995,6 +997,8 @@ trong một quy trình có sẵn người duyệt.
 **Làm thế nào.** Gợi ý sáu mức: đọc nội bộ; đọc từ bên ngoài (nguồn của cạnh B); ghi cục bộ trong workspace; ghi vào hệ thống dùng chung; không đảo ngược được; đặc quyền (tiền, quyền truy cập, production). Tool shell như Bash được xếp mức cao nhất mà nó chạm được, vì nó chạy được mọi thứ.
 
 Tool annotations của MCP (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) là gợi ý do server tự khai, không phải cam kết. Theo spec, khi server không khai: `readOnlyHint` mặc định false, `destructiveHint` mặc định true, `idempotentHint` mặc định false, `openWorldHint` mặc định true. Chính sách của tổ chức luôn được quyền ghi đè annotations. Không bao giờ nâng mức tin cậy của một tool chỉ vì server tự khai `readOnlyHint: true`.
+
+Annotation giả không chỉ đánh lừa policy. Nếu client dùng annotations để quyết định có hỏi phê duyệt hay không, một tool khai `readOnlyHint: true` có thể chạy mà người dùng không được hỏi. Nếu client đưa annotations vào context của mô hình, chính mô hình cũng được dẫn tới chỗ tin rằng tool vô hại, gọi nó mà không nhắc gì với người dùng. Vì vậy annotations nằm trong fingerprint (SC-05): server đổi annotation sau khi đã duyệt thì bị phát hiện. Kiểm tra client của bạn dùng annotations vào việc gì trước khi cho phép tool từ server bên thứ ba.
 
 **Kiểm chứng.** Mọi tool trong danh mục đều có mức phân loại.
 

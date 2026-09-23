@@ -288,7 +288,10 @@ This is a sub-structure (Section 4.2), not a tagged record.
 | `url` | Normalized URL (below) | Remote server over Streamable HTTP |
 | `local` | Absolute path of the executable, followed by `#sha256:<hex>` of its content | Server built and run locally |
 
-URL normalization for `kind = url`: scheme and host lowercased; host converted to IDNA A-labels using UTS #46 non-transitional processing; default port removed; empty path becomes `/`; percent-encoding hex digits uppercased, no other decoding; fragment removed; query kept as received. `[OI-5]`
+URL rules for `kind = url`:
+
+1. The scheme MUST be `https`. The URL MUST NOT contain userinfo (`https://user:pass@host/`) or a query. A URL that violates this MUST be rejected with `E_VALUE`. Userinfo would put a credential into every fingerprint, log record and approval that carries the identity, and parsers disagree on where the host starts when userinfo is present. A query is rejected rather than sorted, because reordering parameters is a repair (Section 4) and servers may treat order as significant. `[OI-5]`
+2. Normalization: scheme and host lowercased; host converted to IDNA A-labels using UTS #46 non-transitional processing; default port removed; empty path becomes `/`; percent-encoding hex digits uppercased, no other decoding; fragment removed.
 
 The name a server reports about itself, or the key under which it appears in client configuration, is **not** a server identity. Several servers can share a name (guideline SC-02).
 
@@ -346,7 +349,7 @@ A verifier other than the proxy needs access to the proxy's pending entries. How
    {"id":<id>,"jsonrpc":"2.0","method":"tools/call","params":{"arguments":<field 0x07>,"name":<field 0x05>}}
    ```
 
-   `<id>` is the JSON-RPC `id` of the agent's request. Every other member of the envelope and of `params`, including `params._meta`, is dropped. `[OI-17]` The body is serialized with `jcs`; because field `0x07` is already `jcs(arguments)`, the bytes of `params.arguments` in the forwarded body are exactly the bytes of field `0x07`. The proxy sets the `Mcp-Method` and `Mcp-Name` headers of the forwarded request from the same values.
+   `<id>` is the JSON-RPC `id` of the agent's request. Every other member of the envelope and of `params`, including `params._meta`, is dropped. `[OI-17]` The body is serialized with `jcs`, so member names come out in UTF-16 code unit order: `id`, `jsonrpc`, `method`, `params` in the envelope, and `arguments` before `name` inside `params`, as shown above. Implementers using a JCS library should expect this order rather than the order in which the members were built. Because JCS is idempotent and field `0x07` is already `jcs(arguments)`, the bytes of `params.arguments` in the forwarded body are exactly the bytes of field `0x07`. The proxy sets the `Mcp-Method` and `Mcp-Name` headers of the forwarded request from the same values.
 4. Actions allowed by policy or under a lease are forwarded with the same construction, from their canonical name and arguments.
 5. The `id` is not covered by the signature; it only correlates the response.
 6. A tool server acting as verifier MUST compare `params.name` and the bytes of `params.arguments` in the request it received with fields `0x05` and `0x07` of the record in evidence key `10`, and reject a mismatch with `E_DIGEST_MISMATCH`.
@@ -517,7 +520,7 @@ A call that fails check 4 or 5 is not covered by the lease. The error is logged,
 `constraints` is a JSON array. Each element is an object:
 
 ```json
-{ "tool": "write_file", "pointer": "/path", "op": "prefix", "value": "src/" }
+{ "tool": "write_file", "pointer": "/path", "op": "beneath", "value": "src" }
 ```
 
 `tool` is OPTIONAL. When present, it is a tool name, and the constraint applies only to calls to tools with that name in the lease tool set. When absent, the constraint applies to calls to every tool in the lease.
@@ -526,13 +529,18 @@ A call that fails check 4 or 5 is not covered by the lease. The error is logged,
 | :--- | :--- |
 | `eq` | The value at `pointer` (RFC 6901) equals `value` under JCS comparison (`jcs(a) = jcs(b)`) |
 | `prefix` | The value is a string whose code points begin with those of `value` |
+| `beneath` | Path check, below |
 | `in` | The value equals one element of the array `value`, under JCS comparison |
 | `max` | The value is a number less than or equal to `value` |
 | `absent` | No value exists at `pointer` |
 
 All applicable constraints must hold (logical AND). A pointer that does not resolve fails every `op` except `absent`. A call that violates a constraint is rejected with `E_LEASE_CONSTRAINT`. A constraint element with an unknown `op`, an unknown member, or a missing required member MUST be rejected at grant time with `E_VALUE`.
 
-`prefix` on file paths is only safe when the tool itself resolves paths beneath a root (for example `openat2` with `RESOLVE_BENEATH`, guideline ISO-03). `"src/../.env"` has the prefix `"src/"`. `[OI-10]`
+`prefix` MUST NOT be used for file paths: `"src/../.env"` has the prefix `"src/"`. Use `beneath`.
+
+`beneath` is a lexical check that rejects rather than resolves. A string is a **plain relative path** if it is non-empty, does not start with `/`, contains no `\` and no U+0000, and, split on `/`, has no segment that is empty, `.` or `..`. The constraint holds when the value at `pointer` is a plain relative path and its first segments equal, one by one and byte for byte, the segments of `value`. So `src/a/b.py` is beneath `src`, while `srcfoo/a`, `src/../.env`, `./src/a`, `src//a` and `/etc/passwd` are not, and fail with `E_LEASE_CONSTRAINT`. A `value` that is not itself a plain relative path is rejected at grant time with `E_VALUE`.
+
+`beneath` does not see symbolic links. A link inside `src/` that points outside it passes the check. The tool must still resolve paths beneath its root (for example `openat2` with `RESOLVE_BENEATH`), or run in a sandbox that bounds the filesystem (guideline ISO-03). Paths are compared byte for byte, so on a case-insensitive filesystem the check can only fail closed. `[OI-10]`
 
 ### 8.4. Grant verification
 
@@ -666,7 +674,7 @@ Result: the auditor reports `verified up to index k`, plus the list of unanchore
 | `E_MISSING_FIELD` | Required tag missing | 4.2 |
 | `E_UNKNOWN_TAG` | Unknown tag | 4.2 |
 | `E_LENGTH` | Length exceeds input or limit, trailing bytes, fixed-width field of wrong length, sub-structure not filling its value, digest length wrong for `alg`, or count mismatch | 4.2, 4.5, 8.1 |
-| `E_VALUE` | Enumerated value out of range, or malformed lease constraint | 4.2, 8.3, 8.4, 9.1 |
+| `E_VALUE` | Enumerated value out of range, URL server identity with userinfo or query, or malformed lease constraint | 4.2, 5.2, 8.3, 8.4, 9.1 |
 | `E_DUP_KEY` | Duplicate JSON member name | 4.3, 6.3, 7.2 |
 | `E_NUMBER` | JSON number whose value changes under RFC 8785 serialization, or that overflows binary64 | 4.3 |
 | `E_JSON` | Invalid JSON, or `arguments` not an object | 4.3, 6.1 |
@@ -891,6 +899,9 @@ Additions not listed in Phụ lục E, proposed by this draft: tagged records wi
 | FP-014 | Fingerprint reference with `sha-384` where `sha-256` is expected | reject `E_ALG_MISMATCH` |
 | FP-015 | Description containing invisible characters (U+200B, tag characters) | accept; digest (detection is the scanner's job, not the fingerprint's) |
 | FP-016 | `url` identity with a non-ASCII host whose UTS #46 transitional and non-transitional A-labels differ (for example containing `ß`) | identity bytes use the non-transitional A-label |
+| FP-017 | `url` identity `https://user:pass@mcp.example/` | reject `E_VALUE` |
+| FP-018 | `url` identity with a query, `https://mcp.example/?b=2&a=1` | reject `E_VALUE` |
+| FP-019 | `url` identity with scheme `http` | reject `E_VALUE` |
 
 ### B.3. ACT · Action request digest
 
@@ -973,8 +984,8 @@ Vectors in this group include a test authenticator key pair so that runners can 
 | :--- | :--- | :--- |
 | LS-001 | Valid lease, call within all limits | accept |
 | LS-002 | `max calls = 10`, eleventh call (guideline ACT-04 "Kiểm chứng") | reject `E_LEASE_BUDGET`, or escalation to per-action approval, as set by the vector's policy mode |
-| LS-003 | `prefix` constraint `src/`, argument `docs/a.md` | reject `E_LEASE_CONSTRAINT` |
-| LS-004 | `prefix` constraint `src/`, argument `src/../.env` | accept by constraint; documents `[OI-10]`; runner emits a warning that safety depends on the tool resolving paths beneath its root |
+| LS-003 | `beneath` constraint `src`, argument `docs/a.md` | reject `E_LEASE_CONSTRAINT` |
+| LS-004 | `beneath` constraint `src`, argument `src/../.env` | reject `E_LEASE_CONSTRAINT` |
 | LS-005 | Call after `not_after` | reject `E_EXPIRED` |
 | LS-006 | Tool not in the lease tool set | reject `E_LEASE_SCOPE` |
 | LS-007 | Tool in set but fingerprint changed | reject `E_FP_CHANGED` |
@@ -990,6 +1001,10 @@ Vectors in this group include a test authenticator key pair so that runners can 
 | LS-017 | Constraint with `"tool": "write_file"`; call to another tool in the lease that violates it | accept |
 | LS-018 | Tool count `n` larger than the entries present | reject at grant `E_LENGTH` |
 | LS-019 | Constraint with unknown `op` | reject at grant `E_VALUE` |
+| LS-020 | `beneath` constraint `src`, argument `src/a/b.py` | accept |
+| LS-021 | `beneath` constraint `src`, argument `srcfoo/a` | reject `E_LEASE_CONSTRAINT` |
+| LS-022 | `beneath` constraint `src`, arguments `./src/a`, `src//a`, `/etc/passwd`, `src\..\x` | each rejected `E_LEASE_CONSTRAINT` |
+| LS-023 | `beneath` constraint with `value` `../src` | reject at grant `E_VALUE` |
 
 ### B.7. LOG · Log chain
 
@@ -1032,12 +1047,12 @@ Vectors in this group include a test authenticator key pair so that runners can 
 | OI-2 | Unknown tags: reject, or allow a range of ignorable extension tags? | Reject everything in `aab-00`; revisit before freezing |
 | OI-3 | Maximum value length | 2^24 bytes; may be too small for large schemas |
 | OI-4 | Should `icons`, `_meta`, and future tool fields be fingerprinted? `_meta` may carry vendor data shown to the model | Not covered; needs input from MCP client implementers on what reaches the model |
-| OI-5 | URL normalization: is the query part of server identity? What about trailing slashes? | Query kept, no trailing-slash normalization |
+| OI-5 | URL identity: are there remote MCP servers whose endpoint genuinely needs a query? Should `http` be allowed for loopback addresses during development? Should trailing slashes be normalized? | Userinfo and query rejected (`E_VALUE`); no trailing-slash normalization |
 | OI-6 | Hash annotations as received, or with MCP defaults applied? | As received; policy interprets |
 | OI-7 | Maximum validity window of an action approval | 300 000 ms |
 | OI-8 | Presentation digest: what exactly does a trusted display commit to? | Field reserved; format and object type undefined until ACT-05 has an implementation |
 | OI-9 | Should `topOrigin` ever be allowed, for approval UIs embedded in another origin? | Reject |
-| OI-10 | Should lease constraints include a path-aware operator (`beneath`) that normalizes `..`? It contradicts "reject, don't repair" | No; rely on the tool resolving beneath root |
+| OI-10 | Path constraints in leases: is a lexical `beneath` that rejects `.`, `..` and empty segments too strict for real tools (for example tools that expect `./` prefixes or absolute paths inside a declared root)? Should absolute roots be supported? | `beneath` with plain relative paths only; symbolic links left to the tool and the sandbox |
 | OI-11 | Recommended checkpoint frequency | Deployment choice; guideline suggests "mỗi N bản ghi hoặc mỗi vài phút" |
 | OI-12 | Align the checkpoint format with the C2SP `tlog-checkpoint` / signed-note formats used by existing transparency logs, instead of a new tagged record | Open; alignment would let existing witnesses co-sign |
 | OI-13 | Salt payload digests to prevent confirmation of low-entropy payloads? | Open |
