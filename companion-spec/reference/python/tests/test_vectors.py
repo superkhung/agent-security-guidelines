@@ -32,11 +32,21 @@ class Vectors(unittest.TestCase):
             with open(path, encoding="utf-8") as fh:
                 vectors.append(json.load(fh))
         by_id = {v["id"]: v for v in vectors}
-        for v in vectors:
-            status, msg = run.check(v, by_id)
-            self.assertIn(status, ("pass", "pending"), "%s: %s" % (v["id"], msg))
-            if v["expected"].get("status") != "pending":
-                self.assertEqual(v["expected"]["source"], "reference-python-1")
+        from aab import sigs
+
+        active = sigs.default_backend()
+        for backend in {type(active): active, sigs.NullBackend: sigs.NullBackend()}.values():
+            for v in vectors:
+                status, msg = run.check(v, by_id, backend)
+                allowed = ("pass", "pending") if sigs.has_crypto(backend) else ("pass", "pending", "no-crypto")
+                self.assertIn(status, allowed, "%s [%s]: %s" % (v["id"], backend.name, msg))
+                if v["expected"].get("status") != "pending":
+                    self.assertEqual(v["expected"]["source"], "reference-python-1")
+
+    def test_only_uts46_and_rfc3161_pending(self):
+        run = _load_runner()
+        pending = sorted(v["id"] for v in run.load_vectors() if v["expected"].get("status") == "pending")
+        self.assertEqual(pending, ["FP-016", "LOG-017"])
 
 
     def test_runner_detects_mismatch(self):
@@ -47,9 +57,16 @@ class Vectors(unittest.TestCase):
         v = context.load_vector("ENC-002")
         v["expected"]["error"] = "E_BAD_UTF8"
         self.assertEqual(run.check(v, {})[0], "fail")
+        from aab import sigs
+
         v = context.load_vector("WA-001")
-        v["precheck"] = {"result": "accept"}
-        self.assertEqual(run.check(v, {})[0], "fail")
+        v["precheck"] = {"stdlib": {"result": "accept"}}
+        self.assertEqual(run.check(v, {}, sigs.NullBackend())[0], "fail")
+        v = context.load_vector("WA-001")
+        self.assertEqual(run.check(v, {}, sigs.NullBackend())[0], "no-crypto")
+        if sigs.has_crypto(sigs.default_backend()):
+            v["expected"]["result"] = "reject"
+            self.assertEqual(run.check(v, {})[0], "fail")
 
 
 class LogWriter(unittest.TestCase):

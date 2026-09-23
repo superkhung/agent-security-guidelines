@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Optional
 
 from . import action, evidence, fingerprint, identity, jsonstrict, lease, log, records, sigs
+from .encoding import b64u
 from .errors import AabError, CryptoUnavailable, Unsupported
 from .jcs import jcs
 
@@ -267,12 +268,60 @@ def h_log_audit(v, inp, ctx):
     return out
 
 
+def h_e2e(v, inp, ctx):
+    """End-to-end scenario (Appendix B.8) through :class:`aab.proxy.Proxy`."""
+    from .proxy import Proxy
+
+    px = Proxy(build_approval_context(ctx), bytes.fromhex(inp["log_id_hex"]))
+    server = _server(inp["server"])
+    anchored = []
+    steps = []
+    for st in inp["steps"]:
+        op = st["op"]
+        sess = _hex(st.get("session_hex"))
+
+        def one(st=st, op=op, sess=sess):
+            if op == "open_session":
+                px.open_session(sess, st["now"])
+                return {"result": "ok"}
+            if op == "close_session":
+                px.close_session(sess, st["now"])
+                return {"result": "ok"}
+            if op == "tools_list":
+                return {"result": "ok", "delivered": px.tools_list(server, _text_or_hex(st, "body"))}
+            if op == "approve_tool":
+                return {"result": "ok", "fingerprint": px.approve_tool(st["name"]).text()}
+            if op == "call":
+                ch = px.call(sess, _text_or_hex(st, "body"), st["now"])
+                return {"result": "challenge", "sequence": ch["sequence"], "digest": ch["digest"].text(),
+                        "challenge": b64u(ch["digest"].digest), "record_hex": ch["record"].hex()}
+            if op == "present":
+                body = px.present(sess, st["sequence"], bytes.fromhex(st["evidence_hex"]), st["now"])
+                return _accept(forwarded_text=body.decode("utf-8"))
+            if op == "result":
+                px.result(sess, st["sequence"], bytes.fromhex(st["payload_hex"]), st["now"])
+                return {"result": "ok"}
+            if op == "checkpoint":
+                rec = px.checkpoint(st["now"])
+                anchored.append(log.AnchoredCheckpoint(rec, bytes.fromhex(st["cose_sign1_hex"])))
+                return {"result": "ok", "record_hex": rec.hex()}
+            if op == "audit":
+                res = log.audit(px.writer.records, anchored, px.writer.log_id, _cose_key(inp["log_key"]),
+                                backend=_BACKEND[0], cfg=_cfg(ctx))
+                if res["error"]:
+                    return {"result": "reject", "error": res["error"]}
+                return _accept(verified_up_to=res["verified_up_to"], unanchored=res["unanchored"])
+            raise ValueError("unknown e2e op %r" % op)
+        steps.append(_run(one))
+    return {"result": steps[-1]["result"], "steps": steps, "log_hex": [r.hex() for r in px.writer.records]}
+
+
 HANDLERS = {
     "string": h_string, "json": h_json, "record": h_record, "digest-ref": h_digest_ref,
     "server-identity": h_server_identity, "tool-fp": h_tool_fp, "fp-comparator": h_fp_comparator,
     "action": h_action, "request": h_request, "forwarding": h_forwarding, "tool-server": h_tool_server,
     "harness": h_harness, "evidence": h_evidence, "lease-grant": h_lease_grant,
-    "lease-call": h_lease_call, "log-audit": h_log_audit,
+    "lease-call": h_lease_call, "log-audit": h_log_audit, "e2e": h_e2e,
 }
 
 
@@ -290,11 +339,12 @@ def _run(fn) -> dict:
 def execute(vector: dict, backend: Optional[sigs.SignatureBackend] = None) -> dict:
     """Run one vector (or each of its ``cases``) and return the outcome.
 
-    ``backend`` is the signature backend; the default raises
-    ``CryptoUnavailable`` at every signature step.
+    ``backend`` is the signature backend; the default is
+    :func:`aab.sigs.default_backend` (``cryptography`` if it imports, else a
+    backend that raises ``CryptoUnavailable`` at every signature step).
     """
     prev = _BACKEND[0]
-    _BACKEND[0] = backend or sigs.NullBackend()
+    _BACKEND[0] = backend or sigs.default_backend()
     try:
         return _execute(vector)
     finally:

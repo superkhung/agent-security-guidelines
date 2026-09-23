@@ -13,7 +13,12 @@
     "status": "pending"
   },
   "precheck": {
-    "result": "unsupported"
+    "stdlib": {
+      "result": "unsupported"
+    },
+    "crypto": {
+      "result": "unsupported"
+    }
   },
   "note": "needs UTS #46: the Python standard library has no UTS #46 mapping table, so this implementation restricts url hosts to ASCII. Expected (not generated): identity id https://xn--strae-oqa.example/mcp (non-transitional; transitional processing would give strasse.example)."
 }

@@ -17,23 +17,39 @@
     "anchored": [
       {
         "record_hex": "0001000000101f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f000200000008000000000000000500030000002f000000077368612d3235360000002087bdaf3115777c1ab517554e016b32b1c2e6dc42148fae47920b9bb5f9e5f33a000400000008000001a0c451f2a0",
-        "cose_sign1_hex": "d28443a10126a0582f000000077368612d32353600000020617caafb9c786c2ace4cb596685bc919c550f3e8db9c56fd8a0ecd23f0031695584000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "cose_sign1_hex": "d28443a10126a0582f000000077368612d32353600000020617caafb9c786c2ace4cb596685bc919c550f3e8db9c56fd8a0ecd23f003169558403ac370f6e45ab132aeac7c8a5827919debd1cc6822fbfe96cc217213928b133d467f3f932b704f3f9f3547a39b1bc0bdc6d2bebe22acfa8202d6c7b94c9a8476"
       }
     ],
     "log_key": {
       "kty": 2,
       "crv": 1,
       "alg": -7,
-      "x_hex": "6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296",
-      "y_hex": "4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5"
+      "x_hex": "392cac5e9c8ad767c2f779e5c82f812605cdc0f41ac46e6317103a41869e681d",
+      "y_hex": "6e7365f49ee6f549b7cfdbded80d80600256af0a5cdddb274914887f5fcd19b1"
     },
     "writer_only_checkpoints": [
       {
         "record_hex": "0001000000101f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f000200000008000000000000000500030000002f000000077368612d32353600000020b05860da533ed148a25f4751bb727e32b04b3479abdd213414f8d518749c24f8000400000008000001a0c451f2a0",
-        "cose_sign1_hex": "d28443a10126a0582f000000077368612d3235360000002040ba03ee0cb248513c4984f136de144cb9b6dbf9a150519e1edf0fc9f2d185b7584000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+        "cose_sign1_hex": "d28443a10126a0582f000000077368612d3235360000002040ba03ee0cb248513c4984f136de144cb9b6dbf9a150519e1edf0fc9f2d185b75840333cf38ae483ea471f3ffdaac4cc3ea306e7febb614cdb434c6714177de73efc9b146128652b5bed6f4f99eba5cf6590c8b391921ab6f76ed1e805d67265e9f5",
+        "timestamp_token_hex": "3000"
       }
     ]
   },
+  "test_keys": {
+    "log": {
+      "cose_key": {
+        "kty": 2,
+        "crv": 1,
+        "alg": -7,
+        "x_hex": "392cac5e9c8ad767c2f779e5c82f812605cdc0f41ac46e6317103a41869e681d",
+        "y_hex": "6e7365f49ee6f549b7cfdbded80d80600256af0a5cdddb274914887f5fcd19b1"
+      },
+      "private_scalar_hex": "ce5e44ddb580ad09d4ad7194f0dc1255b916b87f0ccffda43d58dd1be933c59a",
+      "derivation": "d = SHA-256(\"aab-00 test key: log checkpoint es256\") mod (n - 1) + 1",
+      "use": "log writer checkpoint key, COSE_Sign1 (raw r||s)"
+    }
+  },
+  "test_keys_note": "All keys are fixed TEST keys, published here on purpose; ECDSA signatures use RFC 6979 deterministic nonces.",
   "intermediate": {
     "heads_hex": [
       "e8f01c95f7183d23645186e85b87437cc91f2a2f4b16e53414aef55bc9422541",
@@ -44,11 +60,19 @@
       "b05860da533ed148a25f4751bb727e32b04b3479abdd213414f8d518749c24f8"
     ]
   },
-  "expected": {
-    "status": "pending"
-  },
+  "requires": [
+    "crypto"
+  ],
   "precheck": {
-    "result": "needs-crypto"
+    "stdlib": {
+      "result": "needs-crypto"
+    }
   },
-  "note": "needs crypto backend: the outcome depends on a real signature (stdlib-only milestone). The anchored checkpoint's COSE_Sign1 must be signed with the es256 test key. Expected: E_LOG_CHAIN."
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_LOG_CHAIN"
+  },
+  "note": "The writer's own checkpoint of the fork is validly signed and carries a (placeholder) time-stamp token; it is not anchored, so the auditor ignores it."
 }

@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Logic after the signature step, exercised with FAKE backends.
 
-These tests run the inputs of the pending vectors with a backend that
-pretends every signature verifies (or fails). They check that the steps
-*after* the signature (counter, pending-entry consumption, checkpoint heads,
-rollback, unanchored records) produce the outcome the catalogue states.
-They are not evidence about real signatures, which is why the vector files
-stay pending.
+These tests run the inputs of the signature-dependent vectors with a
+backend that pretends every signature verifies (or fails). They check the
+steps *after* the signature (counter, pending-entry consumption, checkpoint
+heads, rollback, unanchored records) independently of any crypto library,
+so they also run with the standard library only. The real signatures are
+checked by test_crypto_backend.py and the vector runner.
 """
 
 import hashlib

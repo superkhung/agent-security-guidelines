@@ -19,7 +19,10 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 warnings.simplefilter("ignore", RuntimeWarning)
 
-from aab import sigs  # noqa: E402
+from aab import encoding, sigs  # noqa: E402
+
+sys.stderr.write("aab tests: Python %s, unicodedata %s, signature backend: %s\n" % (
+    sys.version.split()[0], encoding.UNICODE_VERSION, sigs.default_backend().name))
 
 
 class AcceptAll(sigs.SignatureBackend):

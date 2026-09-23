@@ -205,6 +205,9 @@ def verify_checkpoint_signature(cp: AnchoredCheckpoint, log_key: dict, backend: 
     except sigs.SignatureFailure as exc:
         raise AabError(E_LOG_CHECKPOINT, str(exc))
     if cp.timestamp_token is not None:
+        # SPEC-AMBIGUITY: 9.4 rule 2 / 9.5 step 3.1 (F-41): no RFC 3161
+        # validation profile (trusted TSAs, required checks, genTime vs the
+        # checkpoint time), so no conforming check can be written.
         raise Unsupported("RFC 3161 time-stamp token validation is not implemented")
 
 

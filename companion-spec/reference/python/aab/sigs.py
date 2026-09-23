@@ -51,12 +51,37 @@ class SignatureBackend:
 
 
 class NullBackend(SignatureBackend):
+    name = "none (stdlib only)"
+
     def verify(self, key, alg, message, signature, rs=None):
-        raise CryptoUnavailable("no crypto backend installed (stdlib-only milestone)")
+        raise CryptoUnavailable("no crypto backend installed")
+
+
+def default_backend() -> SignatureBackend:
+    """The ``cryptography`` backend if it imports, else :class:`NullBackend`.
+
+    Set ``AAB_BACKEND=none`` to force the stdlib-only mode.
+    """
+    import os
+
+    if os.environ.get("AAB_BACKEND", "").lower() in ("none", "null", "stdlib"):
+        return NullBackend()
+    try:
+        from .crypto_cryptography import CryptographyBackend
+    except ImportError:
+        return NullBackend()
+    return CryptographyBackend()
+
+
+def has_crypto(backend: SignatureBackend) -> bool:
+    return not isinstance(backend, NullBackend)
 
 
 def parse_der_ecdsa(sig: bytes):
     """Strict DER ``Ecdsa-Sig-Value`` (SEQUENCE of two INTEGERs); return (r, s)."""
+    # SPEC-AMBIGUITY: 7.5 (F-40): "ASN.1 DER" does not say BER encodings must be
+    # rejected; we reject them. (F-39): low-S is not required, so (r, n - s)
+    # is accepted as well.
     def read_int(b, pos):
         if pos + 2 > len(b) or b[pos] != 0x02:
             raise SignatureFailure("expected INTEGER")
@@ -86,6 +111,10 @@ def parse_der_ecdsa(sig: bytes):
 
 def check_key(key: dict, profile: str, accept_rs256: bool) -> int:
     """Validate the registered key against Section 7.5; return the effective alg."""
+    # SPEC-AMBIGUITY: 7.2/7.5 (F-45): validation of the registered key (point
+    # on the curve, small-order Ed25519 keys, RSA exponent) and its error code
+    # are not specified. Shape is checked here; an invalid point makes the
+    # backend fail the signature step.
     alg = key.get("alg")
     if alg not in EQUIVALENT:
         raise SignatureFailure("algorithm %r not supported" % alg)
