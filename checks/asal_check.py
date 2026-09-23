@@ -529,17 +529,27 @@ def probe_net(args):
 
     proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
     if proxy:
-        m = re.match(r"^(?:https?://)?(?:[^@/]*@)?([^:/]+)(?::(\d+))?", proxy)
-        host, port = (m.group(1), int(m.group(2) or 80)) if m else (None, None)
+        m = re.match(r"^(?:https?://)?(?:([^@/]*)@)?([^:/]+)(?::(\d+))?", proxy)
+        userinfo, host, port = (m.group(1), m.group(2), int(m.group(3) or 80)) if m else (None, None, None)
+        shown = proxy.split("@")[-1]
+        auth = ""
+        if userinfo:
+            # The proxy may require the credentials it was given (srt does); send them so the
+            # answer reflects the allowlist, not the authentication. They are never printed.
+            import base64, urllib.parse
+            token = base64.b64encode(urllib.parse.unquote(userinfo).encode()).decode()
+            auth = "Proxy-Authorization: Basic %s\r\n" % token
         try:
             s = socket.create_connection((host, port), timeout=3)
-            s.sendall(("CONNECT %s:443 HTTP/1.1\r\nHost: %s:443\r\n\r\n" % (args.probe_host, args.probe_host)).encode())
+            s.sendall(("CONNECT %s:443 HTTP/1.1\r\nHost: %s:443\r\n%s\r\n" % (args.probe_host, args.probe_host, auth)).encode())
             line = s.recv(64).split(b"\r\n")[0].decode("latin-1", "replace")
             s.close()
-            allowed = " 200" in line
-            check("proxy %s cho CONNECT tới %s" % (proxy.split("@")[-1], args.probe_host), allowed, line or "không trả lời")
+            if " 407" in line:
+                detail.append("[%s] proxy %s đòi xác thực (%s); không kiểm được allowlist" % (UNKNOWN, shown, line))
+            else:
+                check("proxy %s cho CONNECT tới %s" % (shown, args.probe_host), " 200" in line, line or "không trả lời")
         except OSError as e:
-            detail.append("[%s] không thử được proxy %s: %s" % (UNKNOWN, proxy.split("@")[-1], e))
+            detail.append("[%s] không thử được proxy %s: %s" % (UNKNOWN, shown, e))
     else:
         detail.append("[%s] không có HTTPS_PROXY; không thử được allowlist của proxy" % UNKNOWN)
     record("NET-01", FAIL if bad else PASS, "đường ra mạng ngoài proxy", detail)

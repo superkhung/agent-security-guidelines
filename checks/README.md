@@ -53,13 +53,16 @@ Kết quả chỉ nói về những đường đi mà script đã thử (guideli
 
 Những gì script **không** thử được, phải kiểm tay theo thẻ control: xác thực OAuth của remote MCP (NET-04); tool poisoning (SC-04, dùng máy quét); annotations và fingerprint (SC-05); hạn mức chi tiêu (RES-01); dừng agent và dọn tiến trình con (OBS-04); client có hỏi lại khi cấu hình cấp project thay đổi không (SC-02); UDP 443 (QUIC) riêng lẻ, vì cần một máy nhận để xác nhận. Script coi UDP tới cổng 53 bị chặn là dấu hiệu UDP ra ngoài bị chặn nói chung, nhưng rule firewall theo cổng có thể khác nhau.
 
-Phát hiện biến môi trường giống secret là heuristic theo tên. Với secret trong file, chạy thêm `gitleaks`.
+Phát hiện biến môi trường giống secret là heuristic theo tên. Với secret trong file, chạy thêm `gitleaks`. Một số sandbox tự đặt biến có tên giống secret cho proxy của chính nó (ví dụ `srt` đặt `CLOUDSDK_PROXY_PASSWORD`); đó là credential của proxy trong phiên, không phải secret của bạn.
+
+Khi `HTTPS_PROXY` có kèm user và mật khẩu, script gửi chúng trong yêu cầu CONNECT để câu trả lời phản ánh allowlist chứ không phải bước xác thực. Chúng không bao giờ được in ra.
 
 ## Đã thử trên đâu
 
 | Nền tảng | Trạng thái |
 | :--- | :--- |
 | macOS, Python 3.9, ngoài sandbox và trong `sandbox-exec` với profile chặn và profile lỏng | Đã thử: kết quả đổi đúng theo profile |
+| macOS, `srt` 0.0.77 với hai cấu hình trong `examples/srt/` | Đã thử: mọi phép thử ISO-03, NET-01, NET-02 đạt; proxy của `srt` trả 403 cho domain ngoài allowlist |
 | Linux (bubblewrap, `srt`, Landlock) | Chưa thử |
 | Container Linux trên Docker Desktop 29.6 (Debian bookworm) | Đã thử ba cấu hình: `examples/devcontainer` (mọi dòng đạt), container mặc định (bắt được no-new-privileges chưa bật), `--privileged` với bind-mount home (bắt được bounding set có CAP_SYS_ADMIN, seccomp tắt, ghi được vào home) |
 | Windows, WSL2, Windows Sandbox | Chưa thử |
