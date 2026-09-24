@@ -43,7 +43,7 @@ Ba nguyên tắc lấy thẳng từ guideline:
 | `srt` bọc cả client | `asal probe --via srt --settings <file>`, dùng đúng cấu hình của agent | Mọi tool của agent | Đã thử trên macOS; chưa thử Linux |
 | Runner CI chạy agent | Một bước trong job, cùng môi trường với agent | Mọi tool của agent | Chưa thử |
 | Claude Code với sandbox của chính nó | Yêu cầu agent chạy `asal probe` qua tool Bash | **Chỉ đường đi của shell.** Sandbox của Claude Code chỉ bọc Bash, PowerShell, Monitor và tiến trình con; Read, Edit, Write, WebFetch chịu permission rule ([sandboxing](https://code.claude.com/docs/en/sandboxing.md)). Tool file built-in được kiểm bằng `collect` (deny rule `Read(...)`) | Theo tài liệu |
-| Claude Code, chạy probe qua hook | Hook `SessionStart` | **Chưa biết.** Tài liệu không nói hook chạy trong hay ngoài sandbox. Chưa được dùng cho tới khi thử thật | Cần thử |
+| Claude Code, chạy probe qua hook | Hook `SessionStart` | **Không dùng được cho `probe`.** Tài liệu về hook ghi "Hook commands themselves run unsandboxed" ([hooks](https://code.claude.com/docs/en/hooks.md), phần `DirectoryAdded`), nên probe qua hook đo quyền của người dùng, không phải của agent. Ngược lại, hook `SessionStart` là chỗ tốt để chạy `asal collect` mỗi lần mở phiên | Theo tài liệu; đang chờ thử để xác nhận |
 | MCP server local | Không áp dụng: MCP server của Claude Code không được nói là chạy trong sandbox | Phải bọc riêng (ISO-02) và probe trong môi trường bọc đó | Theo tài liệu |
 | Windows Sandbox | `LogonCommand` | Mọi thứ chạy trong sandbox | Chưa thử |
 
@@ -165,7 +165,7 @@ Quy tắc: một probe mới chỉ được phát hành khi có ít nhất một
 
 ## 10. Câu hỏi mở
 
-1. Hook của Claude Code (`SessionStart`) chạy trong hay ngoài sandbox? Tài liệu không nói; cần thử trên máy có Claude Code.
+1. Hook của Claude Code chạy ngoài sandbox theo tài liệu ("Hook commands themselves run unsandboxed"). Cần một lần thử để xác nhận cho `SessionStart`: chạy cùng một `asal probe` qua hook và qua tool Bash trong cùng phiên, với sandbox bật, rồi so sánh.
 2. Client khác (Codex CLI, Cursor) lưu trạng thái sandbox và chế độ phê duyệt ở đâu, và sandbox của chúng bọc những tool nào?
 3. Có nên cho `collect` đọc thêm log vi phạm sandbox của client, nếu client ghi ra file, để đếm "vi phạm sandbox theo loại" ở Mục 3.6?
 4. Mã probe nên có không gian tên theo control (`iso03.read.credentials`) hay theo kỹ thuật (`fs.read.credentials`)? Bản nháp dùng theo control.
