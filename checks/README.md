@@ -69,6 +69,8 @@ Khi `HTTPS_PROXY` có kèm user và mật khẩu, script gửi chúng trong yêu
 | :--- | :--- |
 | macOS, Python 3.9, ngoài sandbox và trong `sandbox-exec` với profile chặn và profile lỏng | Đã thử: kết quả đổi đúng theo profile |
 | macOS, `srt` 0.0.77 với hai cấu hình trong `examples/srt/` | Đã thử: mọi phép thử ISO-03, NET-01, NET-02 đạt; proxy của `srt` trả 403 cho domain ngoài allowlist |
+| macOS, Claude Code 2.1.273, sandbox bật với `denyRead: ["~/.ssh"]`, probe qua tool Bash | Đã thử: NET-01, NET-02, `~/.ssh`, ghi vào home, SSH agent đều bị chặn. **Nhưng vẫn đọc được `~/.config/gh/hosts.yml`, `~/.docker/config.json` và lịch sử shell**, vì sandbox mặc định cho đọc mọi nơi trừ `denyRead` (ISO-03) |
+| macOS, Claude Code 2.1.273, cùng probe qua hook `SessionStart` | Đã thử: mọi dòng ISO-03, NET-01, NET-02 *Chưa đạt*. Hook chạy ngoài sandbox, đúng như [tài liệu](https://code.claude.com/docs/en/hooks.md); không dùng hook để chạy `probe` |
 | Linux (bubblewrap, `srt`, Landlock) | Chưa thử |
 | Container Linux trên Docker Desktop 29.6 (Debian bookworm) | Đã thử ba cấu hình: `examples/devcontainer` (mọi dòng đạt), container mặc định (bắt được no-new-privileges chưa bật), `--privileged` với bind-mount home (bắt được bounding set có CAP_SYS_ADMIN, seccomp tắt, ghi được vào home) |
 | Windows, WSL2, Windows Sandbox | Chưa thử |
