@@ -15,7 +15,7 @@ guideline/        Guideline, bản gốc (tiếng Việt)
 TOOLS.md          Bản sống của bảng công cụ ở Mục 5.1; khi lệch với guideline, tin file này
 playbooks/        Playbook sự cố, break-glass và kịch bản diễn tập cho OBS-06
 checks/           Script chạy tự động phép kiểm chứng của ASAL-0 và phần máy trạm của ASAL-1
-examples/         Cấu hình mẫu đã kiểm thử: devcontainer có proxy allowlist, cấu hình srt
+examples/         Cấu hình mẫu đã kiểm thử: devcontainer có proxy allowlist, cấu hình srt, settings của Claude Code
 companion-spec/   Agent Action Binding: Wire Format and Test Vectors (tiếng Anh, bản nháp aab-00)
 pdf/              Công cụ xuất PDF
 ```
