@@ -26,13 +26,16 @@ docker run --rm -u 1000:1000 -v "$root:/workspace:ro" -w /workspace "$image" $pr
 
 fake="$(mktemp -d)"; mkdir -p "$fake/.ssh" "$fake/.config/gh"
 echo "fake key, not a secret" > "$fake/.ssh/id_test"; echo "fake: token" > "$fake/.config/gh/hosts.yml"
-chmod -R a+rwX "$fake"
-docker run --rm --privileged -u 1000:1000 -e HOME=/home/agent -v "$fake:/home/agent" -v "$root:/workspace" -w /workspace \
-  "$image" python3 /workspace/checks/asal.py probe --workspace /workspace --context fixture --json --no-network > "$out/container-privileged-home.json"
+# A workspace any uid can write to: on CI runners the checkout belongs to the runner user,
+# so uid 1000 in the container could not create the symlink probe there.
+ws="$(mktemp -d)"; cp "$root/checks/asal.py" "$ws/"
+chmod -R a+rwX "$fake" "$ws"
+docker run --rm --privileged -u 1000:1000 -e HOME=/home/agent -v "$fake:/home/agent" -v "$ws:/workspace" -w /workspace \
+  "$image" python3 /workspace/asal.py probe --workspace /workspace --context fixture --json --no-network > "$out/container-privileged-home.json"
 check container-privileged-home
 
 docker run --rm --network host -u 1000:1000 -v "$root:/workspace:ro" -w /workspace "$image" $probe > "$out/container-network-host.json"; check container-network-host
 
 docker compose -f "$compose_dir/compose.yaml" down -v >/dev/null 2>&1
-rm -rf "$fake"
+rm -rf "$fake" "$ws"
 exit $rc
