@@ -5,7 +5,8 @@
 Hai nhóm phép thử:
 
   config   Đọc cấu hình MCP và cấu hình client trên máy (SC-01, SC-02, SC-03, NET-04,
-           ACT-03). Chạy như người dùng bình thường, ngoài sandbox.
+           ACT-03; với Claude Code thêm ISO-02 và ISO-03 cho tool file built-in).
+           Chạy như người dùng bình thường, ngoài sandbox.
   probe    Thử những gì tiến trình của agent làm được (ISO-01, ISO-03, ISO-04, NET-01,
            NET-02, CRED-01). Phải chạy BÊN TRONG môi trường của agent: yêu cầu agent
            chạy lệnh này, hoặc chạy qua srt, trong devcontainer, trong Windows Sandbox.
@@ -286,22 +287,103 @@ def check_config(workspace):
     else:
         record("NET-04", NA, "không có remote MCP server")
 
-    # ACT-03: Claude Code "bypassPermissions" outside a container disables every approval prompt.
-    bypass = []
-    for path in [os.path.join(HOME, ".claude", "settings.json"),
-                 os.path.join(workspace, ".claude", "settings.json"),
-                 os.path.join(workspace, ".claude", "settings.local.json")]:
+    check_claude_code(workspace)
+
+
+def claude_code_settings(workspace):
+    """Claude Code settings sources that exist: [(scope, path, data)].
+
+    Scopes: managed (system directory), user (~/.claude/settings.json), project and local
+    (.claude/settings.json and .claude/settings.local.json in the workspace).
+    https://code.claude.com/docs/en/managed-settings.md, https://code.claude.com/docs/en/settings.md
+    """
+    if IS_MAC:
+        managed = "/Library/Application Support/ClaudeCode/managed-settings.json"
+    elif IS_WIN:
+        managed = os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "ClaudeCode", "managed-settings.json")
+    else:
+        managed = "/etc/claude-code/managed-settings.json"
+    found = []
+    for scope, path in [("managed", managed),
+                        ("user", os.path.join(HOME, ".claude", "settings.json")),
+                        ("project", os.path.join(workspace, ".claude", "settings.json")),
+                        ("local", os.path.join(workspace, ".claude", "settings.local.json"))]:
         try:
             with open(path, encoding="utf-8") as f:
-                mode = ((json.load(f).get("permissions") or {}).get("defaultMode"))
-            if mode == "bypassPermissions":
-                bypass.append(path)
-        except (OSError, ValueError, AttributeError):
+                data = json.load(f)
+            if isinstance(data, dict):
+                found.append((scope, path, data))
+        except (OSError, ValueError):
             pass
-    if bypass:
-        record("ACT-03", FAIL, "Claude Code đặt defaultMode = bypassPermissions (bỏ mọi phê duyệt); chỉ chấp nhận bên trong container (ISO-04)", bypass)
+    return found
+
+
+CREDENTIAL_READ = [".ssh", ".aws", ".config/gcloud", ".azure", ".kube", ".docker", ".gnupg",
+                   ".netrc", ".git-credentials", ".config/gh"]
+
+
+def check_claude_code(workspace):
+    """ACT-03, ISO-02 and ISO-03 from Claude Code settings.
+
+    The Claude Code sandbox covers Bash, PowerShell and Monitor commands and their child
+    processes only; Read, Edit, Write and WebFetch are governed by permission rules
+    (https://code.claude.com/docs/en/sandboxing.md). The probe runs through the shell, so
+    it cannot see the built-in file tools: their credential protection is checked here.
+    """
+    sources = claude_code_settings(workspace)
+    if not sources and not os.path.isdir(os.path.join(HOME, ".claude")):
+        record("ACT-03", NA, "không thấy Claude Code trên máy; client khác cần kiểm tay")
+        return
+
+    # ACT-03. bypassPermissions only takes effect from managed or user settings (or the CLI);
+    # in project or local settings it is ignored (https://code.claude.com/docs/en/permission-modes.md).
+    effective, ignored = [], []
+    for scope, path, data in sources:
+        mode = (data.get("permissions") or {}).get("defaultMode") if isinstance(data.get("permissions"), dict) else None
+        if mode == "bypassPermissions":
+            (effective if scope in ("managed", "user") else ignored).append("%s: %s" % (scope, path))
+    if effective:
+        record("ACT-03", FAIL, "Claude Code đặt defaultMode = bypassPermissions (bỏ mọi phê duyệt); chỉ chấp nhận khi toàn bộ client chạy trong container (ISO-04)", effective)
+    if ignored:
+        record("ACT-03", WARN, "bypassPermissions trong settings cấp project không có hiệu lực theo tài liệu của Claude Code, nhưng cho thấy ý định bỏ phê duyệt; nên xóa", ignored)
+    if not effective and not ignored:
+        record("ACT-03", PASS, "Claude Code không đặt bypassPermissions trong settings; cờ dòng lệnh --dangerously-skip-permissions cần kiểm riêng")
+
+    # ISO-02. The most specific scope that sets sandbox.enabled wins, except that managed wins over all.
+    enabled = None
+    for scope in ("managed", "local", "project", "user"):
+        for s, path, data in sources:
+            sb = data.get("sandbox") if isinstance(data.get("sandbox"), dict) else None
+            if s == scope and sb is not None and "enabled" in sb:
+                enabled = (bool(sb["enabled"]), "%s: %s" % (s, path))
+                break
+        if enabled:
+            break
+    if enabled and enabled[0]:
+        record("ISO-02", PASS, "Claude Code bật sandbox trong settings; chạy phần probe qua tool Bash để kiểm nó có chặn thật không", [enabled[1]])
+    elif enabled:
+        record("ISO-02", FAIL, "Claude Code tắt sandbox trong settings (sandbox.enabled = false)", [enabled[1]])
     else:
-        record("ACT-03", UNKNOWN, "không thấy chế độ bỏ phê duyệt trong settings của Claude Code; client khác cần kiểm tay")
+        record("ISO-02", FAIL, "Claude Code không bật sandbox trong settings nào (sandbox.enabled); bật qua /sandbox hoặc managed settings, trừ khi cả client đã chạy trong container hay VM (ISO-04)")
+
+    # ISO-03 for built-in file tools: Read deny rules for credential locations.
+    deny = []
+    for s, path, data in sources:
+        perms = data.get("permissions") if isinstance(data.get("permissions"), dict) else {}
+        deny += [str(r) for r in (perms.get("deny") or [])]
+    home_all = any(re.match(r"^Read\((~|//)(/\*\*)?/?\*\*\)$", r.replace(" ", "")) for r in deny)
+    missing = []
+    for rel in CREDENTIAL_READ:
+        if not exists(os.path.join(HOME, *rel.split("/"))):
+            continue
+        covered = home_all or any(r.startswith("Read(~/%s" % rel) or r.startswith("Read(//%s/%s" % (HOME.strip("/"), rel)) for r in deny)
+        if not covered:
+            missing.append("~/" + rel)
+    if missing:
+        record("ISO-03", WARN, "tool Read/Edit của Claude Code không nằm trong sandbox; chưa có deny rule Read(...) cho %d vị trí credential" % len(missing),
+               ["thêm vào permissions.deny, ví dụ \"Read(~/.ssh/**)\""] + missing)
+    else:
+        record("ISO-03", PASS, "có deny rule Read(...) cho các vị trí credential có trên máy (tool file built-in của Claude Code)")
 
 
 # ----------------------------------------------------------------------------------------
@@ -616,7 +698,7 @@ def probe_cred01(workspace):
 
 # ----------------------------------------------------------------------------------------
 
-ORDER = ["SC-01", "SC-02", "SC-03", "ISO-01", "ISO-03", "ISO-04", "NET-01", "NET-02", "NET-04", "CRED-01", "ACT-03"]
+ORDER = ["SC-01", "SC-02", "SC-03", "ISO-01", "ISO-02", "ISO-03", "ISO-04", "NET-01", "NET-02", "NET-04", "CRED-01", "ACT-03"]
 RANK = {FAIL: 0, WARN: 1, UNKNOWN: 2, PASS: 3, NA: 4}
 
 
