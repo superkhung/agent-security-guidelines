@@ -1,0 +1,12 @@
+{
+  "fixture": "container-privileged-home",
+  "description": "--privileged, with a host directory holding fake credentials bind-mounted as home",
+  "expect": {
+    "iso04.cap_sys_admin": "fail",
+    "iso04.seccomp": "fail",
+    "iso04.no_new_privs": "fail",
+    "iso03.read.credentials": "fail",
+    "iso03.read.symlink": "fail",
+    "iso03.write.home": "fail"
+  }
+}

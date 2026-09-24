@@ -46,7 +46,7 @@ Claude Code 2.1.273 trên macOS. Chạy `claude --settings examples/claude-code/
 
 | Phép thử | Kết quả |
 | :--- | :--- |
-| `checks/asal_check.py probe` qua tool Bash: ISO-01, ISO-03, NET-01, NET-02 | Đạt hết. `~/.ssh` (kể cả qua symlink), `~/.config/gh/hosts.yml`, `~/.docker/config.json` và lịch sử shell không đọc được; không ghi được vào home; không tới được SSH agent; không có đường mạng thẳng qua IPv4, IPv6 hay UDP; proxy của sandbox trả 403 cho `example.org` |
+| `checks/asal.py probe` qua tool Bash: ISO-01, ISO-03, NET-01, NET-02 | Đạt hết. `~/.ssh` (kể cả qua symlink), `~/.config/gh/hosts.yml`, `~/.docker/config.json` và lịch sử shell không đọc được; không ghi được vào home; không tới được SSH agent; không có đường mạng thẳng qua IPv4, IPv6 hay UDP; proxy của sandbox trả 403 cho `example.org` |
 | Tool Read đọc `~/asal-canary.txt` (ngoài workspace) | Bị chặn |
 | Tool Read đọc `.env` trong workspace | Bị chặn |
 | Tạo `.mcp.json` trong workspace | Bị chặn |

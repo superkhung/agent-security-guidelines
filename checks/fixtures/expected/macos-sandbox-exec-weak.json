@@ -1,0 +1,11 @@
+{
+  "fixture": "macos-sandbox-exec-weak",
+  "description": "sandbox-exec denying only writes in home except the workspace",
+  "expect": {
+    "iso03.read.credentials": "fail",
+    "iso03.read.symlink": "fail",
+    "iso03.write.home": "pass",
+    "net01.tcp.ipv4": "fail",
+    "net02.dns.udp": "fail"
+  }
+}

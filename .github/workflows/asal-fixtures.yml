@@ -1,0 +1,40 @@
+name: asal-fixtures
+
+# Run asal probe inside deliberately (mis)configured environments and compare every result
+# with checks/fixtures/expected/. A probe that reports pass where the path is open fails here.
+
+on:
+  push:
+    branches: [main]
+    paths: ["checks/**", "examples/**", ".github/workflows/asal-fixtures.yml"]
+  pull_request:
+    paths: ["checks/**", "examples/**", ".github/workflows/asal-fixtures.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  linux-containers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Container fixtures
+        run: checks/fixtures/run-linux-containers.sh
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fake credentials in home
+        run: |
+          mkdir -p ~/.ssh ~/.config/gh
+          echo "fake key, not a secret" > ~/.ssh/id_asal_fixture
+          echo "fake: token" > ~/.config/gh/hosts.yml
+      - name: Install srt
+        run: npm install -g --no-fund --no-audit @anthropic-ai/sandbox-runtime@0.0.77
+      - name: sandbox-exec and srt fixtures
+        run: checks/fixtures/run-macos.sh

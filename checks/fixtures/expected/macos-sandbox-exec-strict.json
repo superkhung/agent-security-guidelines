@@ -1,0 +1,15 @@
+{
+  "fixture": "macos-sandbox-exec-strict",
+  "description": "sandbox-exec denying reads and writes in home except the workspace, and all outbound network; fake credentials in home",
+  "expect": {
+    "iso03.read.credentials": "pass",
+    "iso03.read.symlink": "pass",
+    "iso03.write.home": "pass",
+    "net01.tcp.domain": "pass",
+    "net01.tcp.ipv4": "pass",
+    "net01.udp.ipv4": "pass",
+    "net02.dns.udp": "pass",
+    "net02.dns.tcp": "pass",
+    "net02.resolver": "pass"
+  }
+}

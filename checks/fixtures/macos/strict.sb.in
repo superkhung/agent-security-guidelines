@@ -1,0 +1,7 @@
+(version 1)
+(allow default)
+(deny file-read* (subpath "@HOME@"))
+(allow file-read* (subpath "@WORKSPACE@"))
+(deny file-write* (subpath "@HOME@"))
+(allow file-write* (subpath "@WORKSPACE@") (subpath "/private/tmp") (subpath "/private/var/folders"))
+(deny network-outbound)

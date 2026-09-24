@@ -1,0 +1,4 @@
+{
+  "network": { "allowedDomains": ["api.anthropic.com"], "deniedDomains": [], "allowLocalBinding": false },
+  "filesystem": { "denyRead": [], "allowRead": [], "allowWrite": [".", "/tmp"], "denyWrite": [] }
+}

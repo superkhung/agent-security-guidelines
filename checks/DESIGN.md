@@ -1,6 +1,6 @@
 # Thiết kế: công cụ đánh giá tư thế agent cho cả tổ chức (`asal` v0.1)
 
-Trạng thái: bản nháp thiết kế, mở góp ý. Mã hiện có (`asal_check.py`) là điểm xuất phát; tài liệu này mô tả nó sẽ trở thành gì.
+Trạng thái: v0.1 đã được dựng theo tài liệu này (`checks/asal.py`); phần còn lại vẫn mở góp ý. Những chỗ bản dựng khác với bản thiết kế ban đầu được ghi ngay tại mục tương ứng.
 
 ## 1. Mục tiêu
 
@@ -78,7 +78,7 @@ Mọi file đều là JSON. Không dùng YAML hay TOML, để giữ yêu cầu c
 - `probe` là mã ổn định của từng phép thử, không đổi giữa các phiên bản. Báo cáo drift và bộ môi trường cấu hình sai dựa vào mã này.
 - `kind` là `test` (phép thử thật) hoặc `config` (chỉ đọc cấu hình). Báo cáo tổng hợp hiển thị hai loại khác nhau.
 - `status` dùng mã tiếng Anh cố định: `pass`, `fail`, `review`, `untested`, `na`. Phần hiển thị dịch sang *Đạt*, *Chưa đạt*, *Cần xem*, *Chưa kiểm được*, *Không áp dụng*.
-- Đường dẫn trong home được thay bằng `~`. Hostname và tên người dùng được băm bằng HMAC với một khóa do tổ chức giữ (`--pseudonym-key`); không có khóa thì hai trường này bỏ trống.
+- Đường dẫn trong home được thay bằng `~`. Hostname và tên người dùng được băm bằng HMAC với một khóa do tổ chức giữ (`--pseudonym-key` hoặc `ASAL_PSEUDONYM_KEY`). Không có khóa thì dùng SHA-256, và trường `host.pseudonym` ghi rõ `sha256`. Bản thiết kế ban đầu để trống hai trường này, nhưng khi đó `report` không ghép được kết quả `collect` và `probe` của cùng một máy. Băm SHA-256 của hostname đoán được nếu biết danh sách hostname, nên tổ chức nên đặt khóa.
 
 ### 5.2. Policy
 
@@ -113,6 +113,8 @@ Control máy không tự kiểm được (ví dụ RES-01, OBS-04 diễn tập, 
 }
 ```
 
+Một xác nhận `pass` cũng dùng để giải quyết một kết quả *Cần xem* sau khi đã có người xem: `review` chặn việc đạt cấp cho tới lúc đó. Xác nhận tay không bao giờ đè lên một kết quả `fail` của máy.
+
 Theo Mục 0.5: `waived` chỉ dùng được cho control mức *Nên*. Với control *Bắt buộc*, `waived` nghĩa là use case không đạt cấp đó, và báo cáo chỉ ghi nhận nếu có `risk_accepted_by` là người phía nghiệp vụ. Xác nhận quá hạn được coi như chưa có.
 
 ### 5.4. Ma trận control
@@ -135,16 +137,16 @@ Mỗi báo cáo kết thúc bằng câu của Mục 0.5: kết quả chỉ nói 
 
 Đây là cơ chế giữ cho công cụ không báo *Đạt* sai. Mỗi môi trường có một file kết quả kỳ vọng theo mã probe, và CI chạy `asal probe` trong môi trường đó rồi so sánh.
 
-| Môi trường | Chạy ở đâu trong CI | Kỳ vọng |
-| :--- | :--- | :--- |
-| `examples/devcontainer` | Runner Linux, Docker | Mọi probe `pass` |
-| Container mặc định (không `cap_drop`, không `no-new-privileges`) | Runner Linux, Docker | `iso04.*` `fail` |
-| `--privileged`, home bind-mount | Runner Linux, Docker | `iso04.capbnd`, `iso03.write.home` `fail` |
-| `--network host` | Runner Linux, Docker | `net01.*` `fail` |
-| Network Docker có IPv6, rule chỉ chặn IPv4 | Runner Linux, Docker | `net01.ipv6` `fail` |
-| `srt` với `examples/srt/srt-workspace-only.json` | Runner Linux | Mọi probe `pass` |
-| `srt` không có `denyRead` | Runner Linux | `iso03.read.*` `fail` |
-| `sandbox-exec` profile chặn và profile lỏng | Runner macOS | Như đã thử trên máy |
+| Fixture | Môi trường | Chạy ở đâu trong CI | Kỳ vọng chính |
+| :--- | :--- | :--- | :--- |
+| `devcontainer-strict` | `examples/devcontainer` | Runner Linux, Docker | Mọi probe `pass`, kể cả proxy trả 403 cho domain lạ |
+| `container-default` | Cùng image, `docker run` mặc định | Runner Linux, Docker | `iso04.no_new_privs`, `net01.tcp.ipv4`, `net01.udp.ipv4` `fail` |
+| `container-privileged-home` | `--privileged`, home bind-mount có credential giả | Runner Linux, Docker | `iso04.cap_sys_admin`, `iso04.seccomp`, `iso03.read.*`, `iso03.write.home` `fail` |
+| `container-network-host` | `--network host` | Runner Linux, Docker | `net01.tcp.*` `fail` |
+| `macos-sandbox-exec-strict`, `macos-sandbox-exec-weak` | `sandbox-exec` chặn đọc, ghi, mạng; và chỉ chặn ghi | Runner macOS | Chặt: `pass`; lỏng: `iso03.read.*`, `net01.tcp.ipv4` `fail` |
+| `macos-srt-workspace-only`, `macos-srt-no-denyread` | `srt` 0.0.77 với `examples/srt/srt-workspace-only.json`; và không có `denyRead` | Runner macOS | Chỉ-workspace: `pass`; không `denyRead`: `iso03.read.credentials` `fail` |
+
+Chưa có trong v0.1: fixture `srt` trên Linux (bubblewrap cần mở user namespace trên Ubuntu 24.04), và fixture "network Docker có IPv6, rule chỉ chặn IPv4" (runner của GitHub không có đường IPv6 ra ngoài, nên fixture này không phân biệt được đúng sai ở đó).
 
 Quy tắc: một probe mới chỉ được phát hành khi có ít nhất một môi trường mà nó phải `fail` và một môi trường mà nó phải `pass`, cả hai đều chạy trong CI.
 
@@ -159,8 +161,8 @@ Quy tắc: một probe mới chỉ được phát hành khi có ít nhất một
 
 | Bản | Nội dung |
 | :--- | :--- |
-| v0.1 | CLI `asal` gồm `collect`, `probe` (mã probe ổn định), `report`; schema `asal-report/1`, `asal-policy/1`, `asal-attestation/1`; ma trận sinh từ guideline; báo cáo Markdown và CSV; bộ môi trường cấu hình sai cho container Linux, `srt` trên Linux và `sandbox-exec` trên macOS; hướng dẫn chạy qua devcontainer, CI, `srt` và Bash của Claude Code |
-| v0.2 | Windows, WSL2, Windows Sandbox; drift; JSON lines cho SIEM; thử và ghi kết quả việc chạy probe qua hook |
+| v0.1 (đã dựng) | CLI `asal` gồm `collect`, `probe` (mã probe ổn định), `report`; schema `asal-report/1`, `asal-policy/1`, `asal-attestation/1`; ma trận sinh từ guideline; báo cáo Markdown và CSV; bộ môi trường cấu hình sai cho container Linux, `sandbox-exec` và `srt` trên macOS; hướng dẫn chạy qua devcontainer, CI, `srt` và Bash của Claude Code |
+| v0.2 | Windows, WSL2, Windows Sandbox; drift; JSON lines cho SIEM; fixture `srt` trên Linux |
 | v0.3 | Fingerprint tool (SC-05) bằng thư viện của bản cài đặt tham chiếu `aab`; nhận output của `mcp-scanner` và Snyk Agent Scan cho SC-04 |
 
 ## 10. Câu hỏi mở

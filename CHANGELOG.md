@@ -4,6 +4,10 @@ Phiên bản của guideline theo dạng `MAJOR.MINOR.PATCH`. Mỗi phiên bản
 
 ## [Chưa phát hành]
 
+- `checks/asal.py` v0.1: công cụ đánh giá tư thế agent cho cả tổ chức, gồm `collect`, `probe` (mã probe ổn định), `report` (theo cấp ASAL, với policy và xác nhận tay); ma trận control sinh từ bảng 3.4; tám môi trường cố ý cấu hình sai chạy trong CI. `checks/asal_check.py` vẫn chạy được, dưới dạng tên cũ.
+- `examples/claude-code/`: settings của Claude Code đã kiểm thử.
+- `TOOLS.md`: bảng "Công cụ đóng boundary nào".
+
 ## [0.1.0] · 23/09/2026
 
 Public draft đầu tiên. Nội dung đóng băng để nhận góp ý đến hết 31/12/2026.

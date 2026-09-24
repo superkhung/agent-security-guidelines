@@ -27,7 +27,7 @@ Chạy trong thư mục dự án, vì `.` trong cấu hình là thư mục hiệ
 
 ## Kết quả kiểm thử
 
-`srt` 0.0.77 trên macOS. Chạy `srt --settings <file> python3 checks/asal_check.py probe` trong một workspace thử:
+`srt` 0.0.77 trên macOS. Chạy `srt --settings <file> python3 checks/asal.py probe` trong một workspace thử:
 
 | Phép thử | `srt-denylist.json` | `srt-workspace-only.json` |
 | :--- | :--- | :--- |
