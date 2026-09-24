@@ -4,11 +4,13 @@
 
 Script chỉ dùng thư viện chuẩn của Python (3.9 trở lên), không cần cài gì thêm.
 
+Hướng phát triển thành công cụ đánh giá cho cả tổ chức (gom kết quả nhiều máy, policy, xác nhận tay, báo cáo theo cấp ASAL) được mô tả trong [DESIGN.md](DESIGN.md).
+
 ## Hai nhóm phép thử
 
 | Nhóm | Chạy ở đâu | Thử gì |
 | :--- | :--- | :--- |
-| `config` | Ngoài sandbox, như người dùng bình thường | Danh mục MCP server (SC-01); cấu hình cấp project (SC-02); `npx -y`, `uvx`, `@latest`, image không ghim digest (SC-03); remote MCP không dùng HTTPS (NET-04); Claude Code đặt `bypassPermissions` (ACT-03) |
+| `config` | Ngoài sandbox, như người dùng bình thường | Danh mục MCP server (SC-01); cấu hình cấp project (SC-02); `npx -y`, `uvx`, `@latest`, image không ghim digest (SC-03); remote MCP không dùng HTTPS (NET-04). Với Claude Code: `bypassPermissions` ở settings có hiệu lực (ACT-03), `sandbox.enabled` (ISO-02), deny rule `Read(...)` cho vị trí credential (ISO-03) |
 | `probe` | **Bên trong** môi trường của agent | Quyền root, sudo không mật khẩu (ISO-01); đọc credential ngoài workspace, đọc qua symlink, ghi ra ngoài workspace, SSH/GPG agent, Docker socket, Keychain, D-Bus (ISO-03); capability, seccomp, no-new-privileges, mount, metadata endpoint khi chạy trong container (ISO-04); kết nối thẳng tới domain, IPv4, IPv6, UDP ra ngoài, proxy có chặn domain lạ không (NET-01); DNS thẳng ra ngoài qua UDP, TCP, DoT (NET-02); biến môi trường giống secret, file `.env` (CRED-01) |
 
 Phần `probe` chỉ có ý nghĩa khi chạy đúng chỗ agent chạy, vì thứ cần đo là tiến trình của agent làm được gì, không phải tài khoản của bạn làm được gì. Chạy `probe` ngoài sandbox thì gần như mọi dòng đều là *Chưa đạt*, và như vậy là đúng.
@@ -52,6 +54,10 @@ Mã thoát là 1 nếu có ít nhất một kết quả *Chưa đạt*.
 Kết quả chỉ nói về những đường đi mà script đã thử (guideline, Mục 0.5). *Đạt* không chứng minh hệ thống an toàn; *Chưa đạt* thì chắc chắn có đường hở.
 
 Những gì script **không** thử được, phải kiểm tay theo thẻ control: xác thực OAuth của remote MCP (NET-04); tool poisoning (SC-04, dùng máy quét); annotations và fingerprint (SC-05); hạn mức chi tiêu (RES-01); dừng agent và dọn tiến trình con (OBS-04); client có hỏi lại khi cấu hình cấp project thay đổi không (SC-02); UDP 443 (QUIC) riêng lẻ, vì cần một máy nhận để xác nhận. Script coi UDP tới cổng 53 bị chặn là dấu hiệu UDP ra ngoài bị chặn nói chung, nhưng rule firewall theo cổng có thể khác nhau.
+
+**Tool built-in nằm ngoài sandbox.** Theo [tài liệu của Claude Code](https://code.claude.com/docs/en/sandboxing.md), sandbox chỉ bọc các lệnh Bash, PowerShell, Monitor và tiến trình con của chúng; các tool Read, Edit, Write, WebFetch chịu permission rule, không chịu sandbox. Phần `probe` chạy qua shell nên chỉ đo được đường đi của shell. Việc tool Read có đọc được `~/.ssh` hay không được kiểm ở phần `config`, bằng cách xem đã có deny rule `Read(~/.ssh/**)` chưa. Đây là kiểm cấu hình, không phải phép thử. Nếu cả client chạy trong container, `srt` hay VM thì mọi tool đều nằm trong ranh giới đó, và `probe` chạy trong môi trường ấy đo được cả hai.
+
+`bypassPermissions` đặt trong `.claude/settings.json` hay `.claude/settings.local.json` của project không có hiệu lực theo [tài liệu](https://code.claude.com/docs/en/permission-modes.md); script chỉ tính nó là *Chưa đạt* khi nằm trong managed settings hoặc `~/.claude/settings.json`. Cờ dòng lệnh `--dangerously-skip-permissions` không để lại dấu trong settings, nên script không thấy được.
 
 Phát hiện biến môi trường giống secret là heuristic theo tên. Với secret trong file, chạy thêm `gitleaks`. Một số sandbox tự đặt biến có tên giống secret cho proxy của chính nó (ví dụ `srt` đặt `CLOUDSDK_PROXY_PASSWORD`); đó là credential của proxy trong phiên, không phải secret của bạn.
 
