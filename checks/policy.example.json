@@ -1,0 +1,21 @@
+{
+  "schema": "asal-policy/1",
+  "use_cases": [
+    {
+      "id": "coding-agent",
+      "level": "ASAL-0",
+      "contexts": ["claude-code-bash", "devcontainer", "srt", "sandbox-exec"],
+      "note": "Coding agent trên máy dev, repo cá nhân"
+    },
+    {
+      "id": "coding-agent-internal",
+      "level": "ASAL-1",
+      "contexts": ["claude-code-bash", "devcontainer"],
+      "note": "Coding agent trên repo nội bộ"
+    }
+  ],
+  "approved_mcp_servers": [
+    { "identity": "oci:ghcr.io/example/mcp-github@sha256:0000000000000000000000000000000000000000000000000000000000000000", "note": "chỉ đọc" },
+    { "identity": "pkg:npm:@modelcontextprotocol/server-filesystem@2025.8.1" }
+  ]
+}

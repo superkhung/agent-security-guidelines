@@ -1,0 +1,13 @@
+{
+  "fixture": "container-default",
+  "description": "the same image with docker run defaults: bridge network, no no-new-privileges",
+  "expect": {
+    "iso04.container": "pass",
+    "iso04.cap_sys_admin": "pass",
+    "iso04.no_new_privs": "fail",
+    "iso04.seccomp": "pass",
+    "net01.tcp.ipv4": "fail",
+    "net01.udp.ipv4": "fail",
+    "net02.dns.udp": "fail"
+  }
+}

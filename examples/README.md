@@ -1,6 +1,6 @@
 # Cấu hình mẫu đã kiểm thử
 
-Mỗi thư mục ở đây là một cấu hình dùng được ngay cho một phần của ASAL-0 và ASAL-1. Chỉ những cấu hình đã chạy thử và đã qua phép kiểm chứng bằng [`checks/asal_check.py`](../checks/README.md) mới được đưa vào đây. Mỗi README ghi rõ đã thử trên nền tảng và phiên bản nào.
+Mỗi thư mục ở đây là một cấu hình dùng được ngay cho một phần của ASAL-0 và ASAL-1. Chỉ những cấu hình đã chạy thử và đã qua phép kiểm chứng bằng [`checks/asal.py`](../checks/README.md) mới được đưa vào đây. Mỗi README ghi rõ đã thử trên nền tảng và phiên bản nào.
 
 | Thư mục | Dùng cho | Control | Đã thử |
 | :--- | :--- | :--- | :--- |
@@ -10,4 +10,4 @@ Mỗi thư mục ở đây là một cấu hình dùng được ngay cho một p
 
 Cấu hình mẫu là điểm xuất phát, không phải chứng nhận. Sau khi sửa cho hệ thống của mình (allowlist, đường dẫn, client agent), chạy lại phép kiểm chứng: kết quả trên máy bạn mới là kết quả đáng tin.
 
-Có cấu hình đã thử cho nền tảng khác (Linux với bubblewrap hay Landlock, Windows Sandbox, WSL2, Kubernetes)? Gửi Pull Request kèm kết quả `checks/asal_check.py --json` chạy bên trong môi trường đó.
+Có cấu hình đã thử cho nền tảng khác (Linux với bubblewrap hay Landlock, Windows Sandbox, WSL2, Kubernetes)? Gửi Pull Request kèm kết quả `checks/asal.py probe --json` chạy bên trong môi trường đó.

@@ -1,0 +1,23 @@
+{
+  "schema": "asal-attestation/1",
+  "items": [
+    {
+      "control": "RES-01",
+      "use_case": "",
+      "status": "pass",
+      "by": "Người sở hữu ngân sách AI",
+      "date": "2026-09-24",
+      "expires": "2027-03-31",
+      "evidence": "Hạn mức chi tiêu đặt trên console của provider cho mọi khóa"
+    },
+    {
+      "control": "OBS-04",
+      "use_case": "coding-agent",
+      "status": "pass",
+      "by": "Người sở hữu nền tảng agent",
+      "date": "2026-09-24",
+      "expires": "2026-12-31",
+      "evidence": "Diễn tập dừng agent và dọn tiến trình con theo Phụ lục A bước 10"
+    }
+  ]
+}

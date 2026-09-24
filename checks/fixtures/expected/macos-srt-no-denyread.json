@@ -1,0 +1,10 @@
+{
+  "fixture": "macos-srt-no-denyread",
+  "description": "srt with writes limited to the workspace and a network allowlist, but no denyRead",
+  "expect": {
+    "iso03.read.credentials": "fail",
+    "iso03.write.home": "pass",
+    "net01.tcp.ipv4": "pass",
+    "net01.proxy.allowlist": "pass"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "fixture": "container-network-host",
+  "description": "--network host: the container shares the runner's network",
+  "expect": {
+    "iso04.container": "pass",
+    "net01.tcp.ipv4": "fail",
+    "net01.tcp.domain": "fail"
+  }
+}

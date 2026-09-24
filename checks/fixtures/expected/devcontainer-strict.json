@@ -1,0 +1,23 @@
+{
+  "fixture": "devcontainer-strict",
+  "description": "examples/devcontainer: internal network behind Squid, non-root, cap_drop ALL, no-new-privileges, read-only root, tmpfs home",
+  "expect": {
+    "iso01.privilege": "pass",
+    "iso03.write.home": "pass",
+    "iso03.socket.agents": "pass",
+    "iso04.container": "pass",
+    "iso04.cap_sys_admin": "pass",
+    "iso04.no_new_privs": "pass",
+    "iso04.seccomp": "pass",
+    "iso04.mount": "pass",
+    "iso04.metadata": "pass",
+    "net01.tcp.domain": "pass",
+    "net01.tcp.ipv4": "pass",
+    "net01.udp.ipv4": "pass",
+    "net01.proxy.allowlist": "pass",
+    "net02.dns.udp": "pass",
+    "net02.dns.tcp": "pass",
+    "net02.dns.dot": "pass",
+    "net02.resolver": "pass"
+  }
+}

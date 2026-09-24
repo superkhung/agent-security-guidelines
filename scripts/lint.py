@@ -16,6 +16,7 @@ Checks:
   8. Companion spec: every E_ code used is defined in Section 10 and vice versa;
      every OI-n referenced exists in Appendix C and vice versa.
   9. The version in the guideline, README and CHANGELOG agree.
+ 10. checks/asal_matrix.json matches the 3.4 matrix (scripts/export_matrix.py).
 """
 import glob, os, re, sys
 
@@ -222,6 +223,15 @@ else:
     tag = os.environ.get("RELEASE_TAG")
     if tag and tag != "v" + version:
         fail(GUIDE, 1, "release tag %s does not match guideline version %s" % (tag, version))
+
+
+# 10. checks/asal_matrix.json is generated from the 3.4 matrix -------------------------
+
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+import export_matrix  # noqa: E402
+matrix_path = os.path.join(ROOT, "checks", "asal_matrix.json")
+if os.path.exists(matrix_path) and read(matrix_path) != export_matrix.render(export_matrix.build(guide)):
+    fail(matrix_path, 1, "out of date with the 3.4 matrix: run python3 scripts/export_matrix.py")
 
 
 if errors:

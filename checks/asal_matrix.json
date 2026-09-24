@@ -1,0 +1,490 @@
+{
+  "schema": "asal-matrix/1",
+  "guideline_version": "0.1.0",
+  "levels": [
+    "ASAL-0",
+    "ASAL-1",
+    "ASAL-2",
+    "ASAL-3a",
+    "ASAL-3b"
+  ],
+  "controls": {
+    "SC-01": {
+      "name": "Danh mục agent và MCP server",
+      "levels": {
+        "ASAL-0": "recommended",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "SC-02": {
+      "name": "Chỉ chạy server đã duyệt; coi config từ repo là không tin cậy",
+      "levels": {
+        "ASAL-0": "required",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "SC-03": {
+      "name": "Ghim phiên bản và toàn vẹn",
+      "levels": {
+        "ASAL-0": "required",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "SC-04": {
+      "name": "Quét tool trước khi duyệt",
+      "levels": {
+        "ASAL-0": "recommended",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "SC-05": {
+      "name": "Phát hiện rug pull",
+      "levels": {
+        "ASAL-0": "optional",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "SC-06": {
+      "name": "Registry nội bộ và ký phát hành",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "optional",
+        "ASAL-2": "recommended",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "SC-07": {
+      "name": "Toàn vẹn model chạy local",
+      "levels": {
+        "ASAL-0": "recommended",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "ISO-01": {
+      "name": "Không chạy với quyền admin; tách user",
+      "levels": {
+        "ASAL-0": "required",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "ISO-02": {
+      "name": "Bật sandbox của client",
+      "levels": {
+        "ASAL-0": "required",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "ISO-03": {
+      "name": "Chặn credential ngoài workspace ở cấp OS",
+      "levels": {
+        "ASAL-0": "recommended",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "ISO-04": {
+      "name": "Container/microVM cho chế độ tự động",
+      "levels": {
+        "ASAL-0": "recommended",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      },
+      "notes": {
+        "ASAL-3b": "microVM"
+      }
+    },
+    "ISO-05": {
+      "name": "Tách agent khỏi môi trường production",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "NET-01": {
+      "name": "Egress mặc định chặn, allowlist qua proxy",
+      "levels": {
+        "ASAL-0": "optional",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "NET-02": {
+      "name": "DNS không đi thẳng ra ngoài",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "NET-03": {
+      "name": "Kiểm soát đích ghi được (chống exfil qua domain hợp lệ)",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "optional",
+        "ASAL-2": "recommended",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "NET-04": {
+      "name": "Bảo mật kết nối remote MCP",
+      "levels": {
+        "ASAL-0": "required",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "NET-05": {
+      "name": "Header/body nhất quán tại gateway",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "not-applicable",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "NET-06": {
+      "name": "Output không thành kênh gửi ra ngoài",
+      "levels": {
+        "ASAL-0": "recommended",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "CRED-01": {
+      "name": "Không secret dài hạn trong tầm agent",
+      "levels": {
+        "ASAL-0": "required",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "CRED-02": {
+      "name": "Danh tính và scope riêng cho agent",
+      "levels": {
+        "ASAL-0": "optional",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "CRED-03": {
+      "name": "Credential ngắn hạn, cấp qua broker",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "optional",
+        "ASAL-2": "recommended",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "CRED-04": {
+      "name": "Che secret trong output (best-effort)",
+      "levels": {
+        "ASAL-0": "optional",
+        "ASAL-1": "recommended",
+        "ASAL-2": "recommended",
+        "ASAL-3a": "recommended",
+        "ASAL-3b": "recommended"
+      }
+    },
+    "ACT-01": {
+      "name": "Phân loại tool theo tác động",
+      "levels": {
+        "ASAL-0": "recommended",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "ACT-02": {
+      "name": "Policy allow/deny/ask theo tool và tham số",
+      "levels": {
+        "ASAL-0": "recommended",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "ACT-03": {
+      "name": "Giao diện phê duyệt hiển thị đúng thứ sẽ xảy ra",
+      "levels": {
+        "ASAL-0": "required",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "not-applicable"
+      }
+    },
+    "ACT-04": {
+      "name": "Capability lease",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "optional",
+        "ASAL-2": "recommended",
+        "ASAL-3a": "recommended",
+        "ASAL-3b": "recommended"
+      }
+    },
+    "ACT-05": {
+      "name": "Phê duyệt trên giao diện tin cậy",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "not-applicable",
+        "ASAL-2": "optional",
+        "ASAL-3a": "required",
+        "ASAL-3b": "not-applicable"
+      }
+    },
+    "ACT-06": {
+      "name": "Phê duyệt ràng buộc mật mã với tham số",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "not-applicable",
+        "ASAL-2": "optional",
+        "ASAL-3a": "required",
+        "ASAL-3b": "not-applicable"
+      }
+    },
+    "ACT-07": {
+      "name": "Hành động đặc quyền đi qua quy trình sẵn có",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "RES-01": {
+      "name": "Hạn mức chi tiêu và khóa ảo",
+      "levels": {
+        "ASAL-0": "required",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "RES-02": {
+      "name": "Giới hạn bước, thời gian, tần suất",
+      "levels": {
+        "ASAL-0": "recommended",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "RES-03": {
+      "name": "Giới hạn kích thước kết quả",
+      "levels": {
+        "ASAL-0": "optional",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "OBS-01": {
+      "name": "Log tool call có cấu trúc, lưu ngoài máy",
+      "levels": {
+        "ASAL-0": "recommended",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "OBS-02": {
+      "name": "Log chống sửa (tamper-evident)",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "optional",
+        "ASAL-2": "recommended",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "OBS-03": {
+      "name": "Rule phát hiện, đẩy về SIEM",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "OBS-04": {
+      "name": "Kill switch và thu hồi",
+      "levels": {
+        "ASAL-0": "required",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      },
+      "notes": {
+        "ASAL-0": "thủ công",
+        "ASAL-3b": "tự động"
+      }
+    },
+    "OBS-05": {
+      "name": "Forensics",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "optional",
+        "ASAL-2": "recommended",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "OBS-06": {
+      "name": "Playbook sự cố và break-glass",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "MEM-01": {
+      "name": "Nguồn gốc bản ghi memory",
+      "levels": {
+        "ASAL-0": "optional",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "MEM-02": {
+      "name": "Kiểm soát ghi memory dài hạn",
+      "levels": {
+        "ASAL-0": "recommended",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "MEM-03": {
+      "name": "Phân quyền khi truy xuất RAG",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "required",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "MEM-04": {
+      "name": "Tách tenant/người dùng",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "MEM-05": {
+      "name": "Hết hạn và rà soát memory",
+      "levels": {
+        "ASAL-0": "optional",
+        "ASAL-1": "optional",
+        "ASAL-2": "recommended",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "MA-01": {
+      "name": "Danh tính riêng cho từng agent",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "optional",
+        "ASAL-2": "recommended",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "MA-02": {
+      "name": "Ủy quyền thu hẹp dần",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "optional",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "MA-03": {
+      "name": "Không tin ngầm giữa các agent",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "recommended",
+        "ASAL-2": "required",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    },
+    "MA-04": {
+      "name": "Trace xuyên agent",
+      "levels": {
+        "ASAL-0": "not-applicable",
+        "ASAL-1": "optional",
+        "ASAL-2": "recommended",
+        "ASAL-3a": "required",
+        "ASAL-3b": "required"
+      }
+    }
+  }
+}
