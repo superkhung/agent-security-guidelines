@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for asal.py. Run: python3 -m unittest discover -s checks"""
 import contextlib, io, json, os, shutil, sys, tempfile, unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -40,6 +41,16 @@ class PinStatus(unittest.TestCase):
         self.assertEqual(asal.pin_status({"url": "https://mcp.example/"}), (None, None))
 
 
+    def test_relative_command(self):
+        self.assertEqual(self.status("./bin/server", "mcp"), asal.REVIEW)
+        self.assertEqual(self.status("bin/server"), asal.REVIEW)
+        self.assertEqual(asal.pin_status({"command": "./bin/server", "cwd": "/opt/srv"})[0], asal.PASS)
+        self.assertEqual(asal.pin_status({"command": "./bin/server", "cwd": "."})[0], asal.REVIEW)
+        self.assertEqual(self.status("${CLAUDE_PLUGIN_ROOT}/bin/server"), asal.PASS)
+        self.assertEqual(self.status("/usr/local/bin/server"), asal.PASS)
+        self.assertEqual(self.status("node", "server.js"), asal.PASS)
+
+
 class ServerIdentity(unittest.TestCase):
     def test_kinds(self):
         self.assertEqual(asal.server_identity({"command": "npx", "args": ["-y", "@scope/pkg@1.2.3"]}), "pkg:npm:@scope/pkg@1.2.3")
@@ -60,6 +71,14 @@ class CodexToml(unittest.TestCase):
         self.assertEqual(sorted(servers), ["docs site", "git"])
         self.assertEqual(servers["git"], {"command": "uvx", "args": ["mcp-server-git"]})
         self.assertEqual(servers["docs site"], {"url": "https://mcp.example/"})
+
+    def test_enabled_and_cwd(self):
+        servers = asal.parse_codex_toml('[mcp_servers.a]\ncommand = "./a"\ncwd = "."\nenabled = false\n')
+        self.assertEqual(servers["a"], {"command": "./a", "cwd": ".", "enabled": False})
+
+    def test_plugins(self):
+        text = '[plugins."a@m"]\nenabled = true\n\n[plugins."b@m"]\nenabled = false\n[features]\nenabled = true\n'
+        self.assertEqual(asal.parse_codex_plugins(text), {"a@m": True, "b@m": False})
 
 
 class TempHome(unittest.TestCase):
@@ -117,6 +136,17 @@ class ClaudeCodeSettings(TempHome):
         shutil.rmtree(os.path.join(self.ws, ".claude"))
         self.assertEqual(self.statuses("act03.claude.bypass"), [asal.UNTESTED])
 
+    @unittest.skipIf(os.name == "nt" or os.geteuid() == 0, "needs a non-root POSIX user")
+    def test_unreadable_settings_are_untested(self):
+        path = os.path.join(self.home, ".claude", "settings.json")
+        self.write(path, {"sandbox": {"enabled": True}})
+        os.chmod(path, 0)
+        try:
+            self.assertEqual(self.statuses("iso02.claude.sandbox"), [asal.UNTESTED])
+            self.assertEqual(self.statuses("act03.claude.bypass"), [asal.UNTESTED])
+        finally:
+            os.chmod(path, 0o600)
+
     def test_example_settings_pass(self):
         with open(os.path.join(os.path.dirname(HERE), "examples", "claude-code", "settings.json")) as f:
             self.write(os.path.join(self.home, ".claude", "settings.json"), json.load(f))
@@ -124,6 +154,185 @@ class ClaudeCodeSettings(TempHome):
         asal.collect_claude_code(run, self.ws)
         self.assertEqual({r["probe"]: r["status"] for r in run.results},
                          {"act03.claude.bypass": asal.PASS, "iso02.claude.sandbox": asal.PASS, "iso03.claude.file_tools": asal.PASS})
+
+
+class Plugins(TempHome):
+    def collect(self):
+        run = asal.Run()
+        asal.collect_mcp(run, self.ws)
+        return run, {r["probe"]: r for r in run.results}
+
+    def codex_plugin(self, market, name, version, manifest, files=()):
+        root = os.path.join(self.home, ".codex", "plugins", "cache", market, name, version)
+        os.makedirs(os.path.join(root, ".codex-plugin"))
+        self.write(os.path.join(root, ".codex-plugin", "plugin.json"), manifest)
+        for rel, data in files:
+            self.write(os.path.join(root, rel), data)
+        return root
+
+    def test_codex_plugins(self):
+        os.makedirs(os.path.join(self.home, ".codex"))
+        with open(os.path.join(self.home, ".codex", "config.toml"), "w") as f:
+            f.write('[plugins."tools@m"]\nenabled = true\n[plugins."chat@m"]\nenabled = true\n'
+                    '[plugins."gone@m"]\nenabled = true\n[plugins."off@m"]\nenabled = false\n')
+        self.codex_plugin("m", "tools", "1.0", {"mcpServers": "./.mcp.json", "hooks": "./hooks.json"}, [
+            (".mcp.json", {"mcpServers": {"cu": {"command": "./bin/cu", "args": ["mcp"], "cwd": "."},
+                                          "app": {"command": "/abs/launch", "enabled": False}}})])
+        self.codex_plugin("m", "chat", "2.0", {"apps": "./.app.json"}, [(".app.json", {"apps": {"chat": {"id": "asdk_1"}}})])
+        self.codex_plugin("m", "off", "1.0", {"mcpServers": {"x": {"command": "/x"}}})
+        run, res = self.collect()
+        idents = sorted(i["identity"] for i in run.inventory)
+        self.assertEqual(idents, ["app:codex:asdk_1", "plugin:codex:tools@m/1.0/cu"])
+        self.assertIn("tắt, không tính: Codex CLI plugin tools@m: app", res["sc01.inventory"]["evidence"])
+        self.assertEqual(res["sc01.plugins"]["status"], asal.REVIEW)
+        self.assertIn("gone@m", res["sc01.plugins"]["evidence"][0])
+        self.assertEqual(res["sc01.plugin.hooks"]["status"], asal.REVIEW)
+        self.assertEqual(res["sc03.launch"]["status"], asal.REVIEW)
+
+    def claude_plugin(self, name, manifest=None, files=()):
+        root = os.path.join(self.home, ".claude", "plugins", "cache", "mk", name, "1.2.0")
+        os.makedirs(root)
+        if manifest is not None:
+            os.makedirs(os.path.join(root, ".claude-plugin"))
+            self.write(os.path.join(root, ".claude-plugin", "plugin.json"), manifest)
+        for rel, data in files:
+            os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
+            self.write(os.path.join(root, rel), data)
+        return root
+
+    def test_claude_plugins(self):
+        root = self.claude_plugin("gh", files=[(".mcp.json", {"mcpServers": {"github": {"url": "https://api.example/mcp"}}}),
+                                               ("hooks/hooks.json", {"hooks": {}})])
+        self.claude_plugin("db", {"mcpServers": {"pg": {"command": "${CLAUDE_PLUGIN_ROOT}/bin/pg"}}})
+        self.claude_plugin("quiet", files=[(".mcp.json", {"mcpServers": {"q": {"command": "/q"}}})])
+        self.write(os.path.join(self.home, ".claude", "plugins", "installed_plugins.json"),
+                   {"version": 2, "plugins": {"gh@mk": [{"scope": "user", "installPath": root, "version": "1.2.0"}]}})
+        self.write(os.path.join(self.home, ".claude", "settings.json"), {"enabledPlugins": {"gh@mk": True, "quiet@mk": True}})
+        self.write(os.path.join(self.ws, ".claude", "settings.json"), {"enabledPlugins": {"db@mk": True}})
+        self.write(os.path.join(self.ws, ".claude", "settings.local.json"), {"enabledPlugins": {"quiet@mk": False}})
+        run, res = self.collect()
+        self.assertEqual(sorted(i["identity"] for i in run.inventory),
+                         ["plugin:claude:db@mk/1.2.0/pg", "plugin:claude:gh@mk/1.2.0/github"])
+        self.assertEqual(res["sc01.plugin.hooks"]["status"], asal.REVIEW)
+        self.assertEqual(res["sc02.project.config"]["status"], asal.REVIEW)
+        self.assertIn("db@mk (enabledPlugins trong settings cấp project)", res["sc02.project.config"]["evidence"])
+        self.assertEqual(res["net04.remote.https"]["status"], asal.PASS)
+
+    @unittest.skipIf(os.name == "nt" or os.geteuid() == 0, "needs a non-root POSIX user")
+    def test_unreadable_config_is_untested_not_na(self):
+        path = os.path.join(self.home, ".cursor", "mcp.json")
+        os.makedirs(os.path.dirname(path))
+        self.write(path, {"mcpServers": {}})
+        os.chmod(path, 0)
+        try:
+            _, res = self.collect()
+        finally:
+            os.chmod(path, 0o600)
+        self.assertEqual(res["sc01.config.unreadable"]["status"], asal.REVIEW)
+        self.assertEqual(res["sc01.inventory"]["status"], asal.UNTESTED)
+        self.assertEqual(res["sc03.launch"]["status"], asal.UNTESTED)
+
+    def test_empty_config_file_has_no_servers(self):
+        path = os.path.join(self.home, ".cursor", "mcp.json")
+        os.makedirs(os.path.dirname(path))
+        open(path, "w").close()
+        _, res = self.collect()
+        self.assertNotIn("sc01.config.unreadable", res)
+        self.assertEqual(res["sc01.inventory"]["status"], asal.NA)
+
+    def test_no_plugins_no_plugin_results(self):
+        _, res = self.collect()
+        self.assertNotIn("sc01.plugins", res)
+        self.assertNotIn("sc01.plugin.hooks", res)
+
+
+class OtherClients(TempHome):
+    def run_collect(self):
+        # Only home-relative locations: /Applications depends on the machine running the tests.
+        clients = [(n, [p for p in paths if not os.path.isabs(p)], cmds, note) for n, paths, cmds, note in asal.OTHER_CLIENTS]
+        run = asal.Run()
+        with mock.patch.dict(os.environ, {"PATH": self.tmp}), mock.patch.object(asal, "OTHER_CLIENTS", clients):
+            asal.collect_other_clients(run)
+        return run.results
+
+    def test_other_agent_clients_are_review(self):
+        os.makedirs(os.path.join(self.home, ".config", "opencode"))
+        os.makedirs(os.path.join(self.home, ".gemini", "antigravity"))
+        results = self.run_collect()
+        self.assertEqual([(r["probe"], r["status"]) for r in results], [("iso02.other_clients", asal.REVIEW)])
+        self.assertEqual([e.split(":")[0] for e in results[0]["evidence"]], ["opencode", "Antigravity"])
+
+    def test_claude_code_alone_adds_nothing(self):
+        self.assertEqual(self.run_collect(), [])
+
+
+class OtherClientConfigs(TempHome):
+    def collect(self):
+        run = asal.Run()
+        asal.collect_mcp(run, self.ws)
+        return run, {r["probe"]: r for r in run.results}
+
+    def test_opencode_v1_and_v2(self):
+        os.makedirs(os.path.join(self.home, ".config", "opencode"))
+        with open(os.path.join(self.home, ".config", "opencode", "opencode.jsonc"), "w") as f:
+            f.write('{\n  // v1\n  "mcp": {\n    "fs": {"type": "local", "command": ["npx", "-y", "@scope/fs@1.0.0"]},\n'
+                    '    "off": {"type": "local", "command": ["npx", "x"], "enabled": false},\n'
+                    '    "docs": {"type": "remote", "url": "http://docs.example/mcp"}, /* trailing comma */\n  },\n}\n')
+        self.write(os.path.join(self.ws, "opencode.json"),
+                   {"mcp": {"servers": {"git": {"type": "local", "command": ["uvx", "mcp-server-git"]},
+                                        "old": {"type": "local", "command": ["/x"], "disabled": True}}}})
+        run, res = self.collect()
+        self.assertEqual(sorted(i["identity"] for i in run.inventory),
+                         ["pkg:npm:@scope/fs@1.0.0", "pkg:pypi:mcp-server-git", "url:http://docs.example/mcp"])
+        self.assertEqual(res["sc03.launch"]["status"], asal.FAIL)
+        self.assertEqual(res["net04.remote.https"]["status"], asal.FAIL)
+        self.assertEqual(res["sc02.project.config"]["status"], asal.REVIEW)
+        self.assertEqual(len([e for e in res["sc01.inventory"]["evidence"] if e.startswith("tắt, không tính")]), 2)
+
+    def test_antigravity_server_url(self):
+        os.makedirs(os.path.join(self.home, ".gemini", "config"))
+        self.write(os.path.join(self.home, ".gemini", "config", "mcp_config.json"),
+                   {"mcpServers": {"k": {"serverUrl": "https://mcp.example/k"}, "d": {"command": "/d", "disabled": True}}})
+        run, _ = self.collect()
+        self.assertEqual([i["identity"] for i in run.inventory], ["url:https://mcp.example/k"])
+
+    def test_antigravity_cli_settings(self):
+        path = os.path.join(self.home, ".gemini", "antigravity-cli", "settings.json")
+        os.makedirs(os.path.dirname(path))
+        self.write(path, {"enableTerminalSandbox": False, "toolPermission": "always-proceed"})
+        run = asal.Run()
+        asal.collect_antigravity_cli(run)
+        self.assertEqual({r["probe"]: r["status"] for r in run.results},
+                         {"iso02.antigravity_cli.sandbox": asal.FAIL, "act03.antigravity_cli.always_proceed": asal.FAIL})
+        self.write(path, {"toolPermission": "request-review"})
+        run = asal.Run()
+        asal.collect_antigravity_cli(run)
+        self.assertEqual(run.results, [])
+
+
+class EnvSecrets(TempHome):
+    def names(self, env):
+        run = asal.Run()
+        with mock.patch.dict(os.environ, env, clear=True):
+            asal.probe_cred01(run, self.ws)
+        return {r["probe"]: r for r in run.results}["cred01.env.names"]
+
+    def test_sandbox_proxy_password_is_not_a_secret(self):
+        pw = "p" * 32
+        r = self.names({"HTTPS_PROXY": "http://u:%s@localhost:5000" % pw, "CLOUDSDK_PROXY_PASSWORD": pw})
+        self.assertEqual(r["status"], asal.PASS)
+        self.assertIn("CLOUDSDK_PROXY_PASSWORD", r["evidence"][0])
+
+    def test_other_tokens_still_review(self):
+        pw = "p" * 32
+        r = self.names({"HTTPS_PROXY": "http://u:%s@localhost:5000" % pw, "CLOUDSDK_PROXY_PASSWORD": pw, "SERVICE_TOKEN": "t" * 32})
+        self.assertEqual(r["status"], asal.REVIEW)
+        self.assertEqual(r["evidence"][0], "SERVICE_TOKEN")
+
+    def test_remote_proxy_password_is_a_secret(self):
+        pw = "p" * 32
+        r = self.names({"HTTPS_PROXY": "http://u:%s@proxy.corp.example:3128" % pw, "PROXY_PASSWORD": pw})
+        self.assertEqual(r["status"], asal.REVIEW)
 
 
 def report(host, results, command="probe", context="devcontainer", use_case="uc", inventory=None):
@@ -238,6 +447,16 @@ class Evaluate(unittest.TestCase):
         self.assertIn("# Báo cáo tư thế agent", md)
         self.assertIn(asal.CAVEAT, md)
         self.assertTrue(asal.render_csv(ev).startswith("use_case,host,control,status,source"))
+
+    def test_markdown_shows_the_next_level(self):
+        reports = [report("h1", asal0_pass_results() + [("iso03.read.credentials", "ISO-03", asal.PASS)])]
+        policy = {"schema": asal.POLICY_SCHEMA, "use_cases": [{"id": "uc", "level": "ASAL-0"}]}
+        ev, ignored, expired, valid = asal.evaluate(reports, MATRIX, policy, ATTEST_RES_OBS, "2026-09-24")
+        md = asal.render_markdown(ev, MATRIX, policy, ignored, expired, valid, [], 1, "2026-09-24")
+        section = md.split("### Cấp kế tiếp: ASAL-1", 1)[1].split("###", 1)[0]
+        row = next(l for l in section.splitlines() if l.startswith("| ISO-03 "))
+        self.assertEqual(row.split("|")[2].strip(), "1")
+        self.assertNotIn("| SC-02 ", section)
 
 
 class Matrix(unittest.TestCase):

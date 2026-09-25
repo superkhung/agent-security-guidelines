@@ -162,7 +162,8 @@ Quy tắc: một probe mới chỉ được phát hành khi có ít nhất một
 | Bản | Nội dung |
 | :--- | :--- |
 | v0.1 (đã dựng) | CLI `asal` gồm `collect`, `probe` (mã probe ổn định), `report`; schema `asal-report/1`, `asal-policy/1`, `asal-attestation/1`; ma trận sinh từ guideline; báo cáo Markdown và CSV; bộ môi trường cấu hình sai cho container Linux, `sandbox-exec` và `srt` trên macOS; hướng dẫn chạy qua devcontainer, CI, `srt` và Bash của Claude Code |
-| v0.2 | Windows, WSL2, Windows Sandbox; drift; JSON lines cho SIEM; fixture `srt` trên Linux |
+| v0.1.1 (đã dựng) | Từ lần chạy trên máy dev thật: plugin của Codex và Claude Code vào danh mục (SC-01, SC-02), hook của plugin, đường dẫn tương đối (SC-03), file cấu hình bị sandbox giấu thành *Chưa kiểm được*, mật khẩu proxy của sandbox không tính là secret, phần *Cấp kế tiếp* trong báo cáo; cấu hình MCP của Antigravity và opencode, token của agent là credential, client khác trên máy là *Cần xem* ở ISO-02 |
+| v0.2 | Windows, WSL2, Windows Sandbox; drift; JSON lines cho SIEM; fixture `srt` trên Linux; sandbox và approval policy của Codex, opencode và Antigravity IDE (ISO-02, ACT-03), sau khi thử với từng client thật như đã làm với Claude Code |
 | v0.3 | Fingerprint tool (SC-05) bằng thư viện của bản cài đặt tham chiếu `aab`; nhận output của `mcp-scanner` và Snyk Agent Scan cho SC-04 |
 
 ## 10. Câu hỏi mở
