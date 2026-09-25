@@ -29,7 +29,7 @@ Chỉ dùng thư viện chuẩn của Python 3.9 trở lên.
 import argparse, base64, csv, datetime, glob, hashlib, hmac, io, json, os, platform, re
 import shutil, socket, subprocess, sys, tempfile, urllib.parse, uuid
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 REPORT_SCHEMA = "asal-report/1"
 POLICY_SCHEMA = "asal-policy/1"
 ATTEST_SCHEMA = "asal-attestation/1"
@@ -216,11 +216,13 @@ def mcp_config_files(workspace):
         ("Cursor", os.path.join(workspace, ".cursor", "mcp.json"), "project", "mcpServers"),
         ("VS Code", os.path.join(workspace, ".vscode", "mcp.json"), "project", "servers"),
     ]
-    return [entry for entry in user + project if entry[1] and os.path.isfile(entry[1])]
+    # A file hidden by a sandbox is kept, so that reading it fails loudly instead of the
+    # location counting as empty.
+    return [entry for entry in user + project if entry[1] and path_state(entry[1]) != "absent"]
 
 
 def parse_codex_toml(text):
-    """Minimal reader for [mcp_servers.NAME] tables in Codex config.toml (command, args, url)."""
+    """Minimal reader for [mcp_servers.NAME] tables in Codex config.toml (command, args, url, cwd, enabled)."""
     servers, current = {}, None
     for raw in text.splitlines():
         line = raw.strip()
@@ -234,13 +236,170 @@ def parse_codex_toml(text):
             continue
         if current is None:
             continue
-        m = re.match(r"(command|url)\s*=\s*\"(.*)\"", line)
+        m = re.match(r"(command|url|cwd)\s*=\s*\"(.*)\"", line)
         if m:
             current[m.group(1)] = m.group(2)
+        m = re.match(r"enabled\s*=\s*(true|false)\b", line)
+        if m:
+            current["enabled"] = m.group(1) == "true"
         m = re.match(r"args\s*=\s*\[(.*)\]", line)
         if m:
             current["args"] = re.findall(r"\"((?:[^\"\\]|\\.)*)\"", m.group(1))
     return servers
+
+
+def parse_codex_plugins(text):
+    """{"name@marketplace": enabled} from the [plugins."name@marketplace"] tables of Codex config.toml."""
+    plugins, current = {}, None
+    for raw in text.splitlines():
+        line = raw.strip()
+        m = re.match(r'\[plugins\.("[^"]+"|[^.\]]+)\]$', line)
+        if m:
+            current = m.group(1).strip('"')
+            plugins.setdefault(current, False)
+            continue
+        if line.startswith("["):
+            current = None
+            continue
+        m = re.match(r"enabled\s*=\s*(true|false)\b", line)
+        if current and m:
+            plugins[current] = m.group(1) == "true"
+    return plugins
+
+
+def _manifest_part(root, value, key):
+    """A plugin manifest field that is either inline or a path, relative to the plugin root, to a
+    JSON file holding {key: ...} (Codex .mcp.json, .app.json)."""
+    if isinstance(value, str):
+        with open(os.path.join(root, value), encoding="utf-8") as f:
+            data = json.load(f)
+        value = data.get(key, data) if isinstance(data, dict) else {}
+    return value if isinstance(value, dict) else {}
+
+
+def codex_plugins():
+    """Plugins enabled in Codex config.toml, with the MCP servers, apps and hooks each declares.
+
+    Codex keeps installed plugins under ~/.codex/plugins/cache/<marketplace>/<name>/<version>/,
+    with the manifest in .codex-plugin/plugin.json. This layout was read from a Codex install
+    (2026-09); Codex does not document it, so a plugin that cannot be read is reported, never
+    skipped.
+    """
+    config = os.path.join(HOME, ".codex", "config.toml")
+    try:
+        with open(config, encoding="utf-8") as f:
+            enabled = [p for p, on in parse_codex_plugins(f.read()).items() if on]
+    except OSError:
+        return []
+    found = []
+    for plugin in enabled:
+        name, _, market = plugin.partition("@")
+        item = {"client": "Codex CLI", "plugin": plugin, "root": "", "version": "", "servers": {},
+                "apps": {}, "hooks": False, "error": ""}
+        roots = glob.glob(os.path.join(HOME, ".codex", "plugins", "cache", glob.escape(market), glob.escape(name), "*", ".codex-plugin", "plugin.json"))
+        if not roots:
+            item["error"] = "không thấy manifest trong ~/.codex/plugins/cache/%s/%s/" % (market, name)
+            found.append(item)
+            continue
+        manifest = max(roots, key=os.path.getmtime)
+        root = os.path.dirname(os.path.dirname(manifest))
+        item["root"], item["version"] = root, os.path.basename(root)
+        try:
+            with open(manifest, encoding="utf-8") as f:
+                data = json.load(f)
+            item["servers"] = _manifest_part(root, data.get("mcpServers"), "mcpServers")
+            item["apps"] = _manifest_part(root, data.get("apps"), "apps")
+            item["hooks"] = bool(data.get("hooks"))
+        except (OSError, ValueError, AttributeError) as e:
+            item["error"] = "không đọc được manifest %s: %s" % (tilde(manifest), e)
+        found.append(item)
+    return found
+
+
+def _install_paths(index, plugin):
+    """installPath values recorded for plugin in Claude Code's installed_plugins.json, whatever
+    the nesting: the docs name the fields (scope, installPath, version), not the layout."""
+    paths = []
+    def walk(node, under):
+        if isinstance(node, dict):
+            if under and isinstance(node.get("installPath"), str):
+                paths.append(node["installPath"])
+            for k, v in node.items():
+                walk(v, under or k == plugin)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v, under)
+    walk(index, False)
+    return paths
+
+
+def claude_plugins(workspace):
+    """Plugins enabled in Claude Code settings, with the MCP servers and hooks each declares.
+
+    https://code.claude.com/docs/en/plugins/loading.md: plugins live under
+    ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/ (or CLAUDE_CODE_PLUGIN_CACHE_DIR),
+    recorded in installed_plugins.json. enabledPlugins is read from managed, local, project and
+    user settings, the first scope that names a plugin deciding. MCP servers come from .mcp.json
+    at the plugin root and the manifest's mcpServers; hooks from hooks/hooks.json and the
+    manifest's hooks (https://code.claude.com/docs/en/plugins/components.md).
+    """
+    sources = claude_code_settings(workspace)
+    decided = {}
+    for scope in ("managed", "local", "project", "user"):
+        for s, path, data in sources:
+            if s != scope:
+                continue
+            for plugin, on in _section(data, "enabledPlugins").items():
+                decided.setdefault(plugin, (on is True, s))
+    enabled = sorted((p, s) for p, (on, s) in decided.items() if on)
+    if not enabled:
+        return []
+    base = os.environ.get("CLAUDE_CODE_PLUGIN_CACHE_DIR") or os.path.join(HOME, ".claude", "plugins")
+    try:
+        with open(os.path.join(base, "installed_plugins.json"), encoding="utf-8") as f:
+            index = json.load(f)
+    except (OSError, ValueError):
+        index = {}
+    found = []
+    for plugin, scope in enabled:
+        name, _, market = plugin.partition("@")
+        item = {"client": "Claude Code", "plugin": plugin, "scope": scope, "root": "", "version": "",
+                "servers": {}, "apps": {}, "hooks": False, "error": ""}
+        roots = [r for r in _install_paths(index, plugin) if os.path.isdir(r)]
+        roots = roots or [d for d in glob.glob(os.path.join(base, "cache", glob.escape(market), glob.escape(name), "*")) if os.path.isdir(d)]
+        if not roots:
+            item["error"] = "không thấy thư mục cài đặt trong %s" % tilde(base)
+            found.append(item)
+            continue
+        root = max(roots, key=os.path.getmtime)
+        item["root"], item["version"] = root, os.path.basename(root)
+        try:
+            manifest = {}
+            mpath = os.path.join(root, ".claude-plugin", "plugin.json")
+            if os.path.isfile(mpath):
+                with open(mpath, encoding="utf-8") as f:
+                    manifest = json.load(f)
+            servers = {}
+            if os.path.isfile(os.path.join(root, ".mcp.json")):
+                servers.update(_manifest_part(root, ".mcp.json", "mcpServers"))
+            declared = manifest.get("mcpServers")
+            for part in (declared if isinstance(declared, list) else [declared] if declared else []):
+                if isinstance(part, str) and not part.endswith(".json"):
+                    raise ValueError("mcpServers trỏ tới MCP bundle %s, asal chưa đọc được" % part)
+                servers.update(_manifest_part(root, part, "mcpServers"))
+            item["servers"] = servers
+            item["hooks"] = bool(manifest.get("hooks")) or os.path.isfile(os.path.join(root, "hooks", "hooks.json"))
+        except (OSError, ValueError, AttributeError) as e:
+            item["error"] = "không đọc được plugin trong %s: %s" % (tilde(root), e)
+        found.append(item)
+    return found
+
+
+def plugin_sources(workspace):
+    """Enabled plugins of every client asal knows, each with "kind" (codex, claude)."""
+    found = [dict(p, kind="codex") for p in codex_plugins()]
+    found += [dict(p, kind="claude") for p in claude_plugins(workspace)]
+    return found
 
 
 def load_servers(path, loader):
@@ -292,8 +451,19 @@ def _launcher(server):
     return "local", command, args
 
 
-def pin_status(server):
-    """How a server is started, (status, reason). guideline SC-03. (None, None) for remote servers."""
+def _relative_command(command):
+    """True for a command given as a relative path (./x, bin/x): which binary runs then depends
+    on the directory the client starts it from, which a configuration file does not show."""
+    return bool(command) and ("/" in command or "\\" in command) and not os.path.isabs(command) \
+        and not command.startswith(("~", "$", "%"))
+
+
+def pin_status(server, base=None):
+    """How a server is started, (status, reason). guideline SC-03. (None, None) for remote servers.
+
+    base is the directory the configuration came from (a plugin root), used only to say whether
+    a relative command has a matching file there.
+    """
     if server.get("url"):
         return None, None
     kind, command, args = _launcher(server)
@@ -318,7 +488,17 @@ def pin_status(server):
         if ":" not in image.split("/")[-1] or image.endswith(":latest"):
             return FAIL, "image %s không ghim tag hay digest" % (image or "?")
         return REVIEW, "image %s ghim tag, chưa ghim digest" % image
-    return PASS, "chạy trực tiếp %s" % (server.get("command") or "?")
+    command = str(server.get("command") or "")
+    if _relative_command(command):
+        cwd = os.path.expanduser(str(server.get("cwd") or ""))
+        if os.path.isabs(cwd):
+            return PASS, "chạy trực tiếp %s" % tilde(os.path.normpath(os.path.join(cwd, command)))
+        note = ""
+        if base and os.path.isfile(os.path.join(base, command)):
+            note = "; có file cùng tên trong %s" % tilde(base)
+        return REVIEW, ("đường dẫn tương đối %s: binary nào chạy tùy thư mục client dùng làm cwd, "
+                        "nếu đó là workspace thì repo quyết định binary%s" % (command, note))
+    return PASS, "chạy trực tiếp %s" % (command or "?")
 
 
 def server_identity(server):
@@ -345,12 +525,13 @@ def server_identity(server):
 
 def collect_mcp(run, workspace):
     files = mcp_config_files(workspace)
-    project, pins, remotes = [], [], []
+    project, pins, remotes, unread = [], [], [], []
     for client, path, scope, loader in files:
         try:
             servers = load_servers(path, loader)
         except (OSError, ValueError) as e:
             run.add("sc01.config.unreadable", "SC-01", REVIEW, "không đọc được %s" % tilde(path), [str(e)], kind="config")
+            unread.append(tilde(path))
             continue
         for name, srv in servers.items():
             srv = srv if isinstance(srv, dict) else {}
@@ -366,11 +547,49 @@ def collect_mcp(run, workspace):
             if srv.get("url"):
                 remotes.append((where, str(srv["url"]), str(srv.get("type") or srv.get("transport") or "")))
 
+    plugins = plugin_sources(workspace)
+    unreadable, hooks, disabled = [], [], []
+    for p in plugins:
+        label = "%s plugin %s" % (p["client"], p["plugin"])
+        if p["error"]:
+            unreadable.append("%s: %s" % (label, p["error"]))
+            continue
+        config = "%s (plugin %s)" % (tilde(p["root"]), p["plugin"])
+        for name, srv in p["servers"].items():
+            srv = srv if isinstance(srv, dict) else {}
+            if srv.get("enabled") is False:
+                disabled.append("%s: %s" % (label, name))
+                continue
+            st, why = pin_status(srv, p["root"])
+            run.inventory.append({"client": p["client"], "config": config, "scope": "plugin", "name": name,
+                                  "identity": "plugin:%s:%s/%s/%s" % (p["kind"], p["plugin"], p["version"], name),
+                                  "remote": bool(srv.get("url")), "launch": st, "launch_note": why})
+            if st:
+                pins.append((st, "%s: %s → %s" % (label, name, why)))
+            if srv.get("url"):
+                remotes.append(("%s: %s" % (label, name), str(srv["url"]), str(srv.get("type") or srv.get("transport") or "")))
+        for name, app in p["apps"].items():
+            app_id = app.get("id") if isinstance(app, dict) else ""
+            run.inventory.append({"client": p["client"], "config": config, "scope": "plugin", "name": name,
+                                  "identity": "app:%s:%s" % (p["kind"], app_id or name), "remote": True,
+                                  "launch": None, "launch_note": "connector do nhà cung cấp client vận hành"})
+        if p["hooks"]:
+            hooks.append("%s (%s)" % (label, tilde(p["root"])))
+
+    project += ["%s (enabledPlugins trong settings cấp %s)" % (p["plugin"], p["scope"])
+                for p in plugins if p.get("scope") == "project"]
+    n_plugins = sum(1 for p in plugins if not p["error"])
     if run.inventory:
-        run.add("sc01.inventory", "SC-01", PASS, "thu được danh mục: %d MCP server trong %d file cấu hình" % (len(run.inventory), len(files)),
-                [i["config"] + ": " + i["name"] for i in run.inventory], kind="config")
+        run.add("sc01.inventory", "SC-01", PASS, "thu được danh mục: %d MCP server và connector, từ %d file cấu hình và %d plugin" % (len(run.inventory), len(files), n_plugins),
+                [i["config"] + ": " + i["name"] for i in run.inventory] + ["tắt, không tính: " + d for d in disabled], kind="config")
+    elif unread:
+        run.add("sc01.inventory", "SC-01", UNTESTED, "không liệt kê được: %d file cấu hình không đọc được" % len(unread), unread, kind="config")
     else:
         run.add("sc01.inventory", "SC-01", NA, "không thấy file cấu hình MCP ở các vị trí mặc định", kind="config")
+    if unreadable:
+        run.add("sc01.plugins", "SC-01", REVIEW, "có plugin đang bật mà không đọc được manifest: danh mục có thể thiếu server của plugin đó", unreadable, kind="config")
+    if hooks:
+        run.add("sc01.plugin.hooks", "SC-01", REVIEW, "plugin có hook: hook chạy ngoài sandbox của client (đã thử với Claude Code), cần duyệt như code chạy thẳng trên máy", hooks, kind="config")
 
     if project:
         run.add("sc02.project.config", "SC-02", REVIEW, "có cấu hình MCP cấp project: coi là không tin cậy, thay đổi phải được duyệt", project, kind="config")
@@ -380,6 +599,8 @@ def collect_mcp(run, workspace):
     if pins:
         worst = min((s for s, _ in pins), key=SEVERITY.get)
         run.add("sc03.launch", "SC-03", worst, "cách khởi động MCP server", ["[%s] %s" % (LABEL[s], d) for s, d in pins], kind="config")
+    elif unread:
+        run.add("sc03.launch", "SC-03", UNTESTED, "không thấy MCP server local trong các file đọc được", unread, kind="config")
     else:
         run.add("sc03.launch", "SC-03", NA, "không có MCP server local", kind="config")
 
@@ -395,6 +616,8 @@ def collect_mcp(run, workspace):
         st = min((s for s, _ in bad), key=SEVERITY.get) if bad else PASS
         run.add("net04.remote.https", "NET-04", st, "%d remote MCP server; phần xác thực OAuth cần kiểm tay" % len(remotes),
                 ["[%s] %s" % (LABEL[s], d) for s, d in bad] or ["%s: %s" % (w, u) for w, u, _ in remotes], kind="config")
+    elif unread:
+        run.add("net04.remote.https", "NET-04", UNTESTED, "không thấy remote MCP server trong các file đọc được", unread, kind="config")
     else:
         run.add("net04.remote.https", "NET-04", NA, "không có remote MCP server", kind="config")
 
@@ -420,8 +643,10 @@ def claude_code_settings(workspace):
                 data = json.load(f)
             if isinstance(data, dict):
                 found.append((scope, path, data))
-        except (OSError, ValueError):
+        except FileNotFoundError:
             pass
+        except (OSError, ValueError) as e:
+            found.append((scope, path, {"__unreadable__": str(e)}))
     return found
 
 
@@ -443,8 +668,16 @@ def collect_claude_code(run, workspace):
     the built-in file tools, so their protection is checked here, from settings.
     """
     sources = claude_code_settings(workspace)
-    if not sources and not os.path.isdir(os.path.join(HOME, ".claude")):
+    if not sources and path_state(os.path.join(HOME, ".claude")) == "absent":
         run.add("act03.claude.bypass", "ACT-03", UNTESTED, "không thấy Claude Code trên máy; client khác cần kiểm tay hoặc xác nhận tay", kind="config")
+        return
+    unreadable = ["%s: %s" % (tilde(p), d["__unreadable__"]) for s, p, d in sources if "__unreadable__" in d]
+    if unreadable:
+        # A setting we cannot see may be the one that enables or disables something; judging
+        # from the rest would give a wrong answer either way.
+        msg = "không đọc được settings của Claude Code; nếu collect đang chạy trong sandbox, chạy lại như người dùng bình thường, ngoài sandbox"
+        for probe, control in (("act03.claude.bypass", "ACT-03"), ("iso02.claude.sandbox", "ISO-02"), ("iso03.claude.file_tools", "ISO-03")):
+            run.add(probe, control, UNTESTED, msg, unreadable, kind="config")
         return
 
     # ACT-03. bypassPermissions takes effect only from managed or user settings (or the CLI);
@@ -741,17 +974,38 @@ SECRET_NAME = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE)
 NOT_SECRET = re.compile(r"(PATH|FILE|DIR|URL|HOST|SOCK|ID$|_NAME$|KEYCHAIN)", re.I)
 
 
+LOOPBACK = ("localhost", "127.0.0.1", "::1")
+
+
+def local_proxy_passwords():
+    """Passwords in proxy URLs that point at this machine. A sandbox that filters egress through
+    a local proxy (Claude Code, srt) gives each session such a password, and copies it to
+    variables like CLOUDSDK_PROXY_PASSWORD; it only unlocks that proxy."""
+    found = set()
+    for name in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"):
+        try:
+            p = urllib.parse.urlsplit(os.environ.get(name, ""))
+            if p.hostname in LOOPBACK and p.password:
+                found.add(urllib.parse.unquote(p.password))
+        except ValueError:
+            pass
+    return found
+
+
 def probe_cred01(run, workspace):
-    suspicious = [n for n, v in os.environ.items()
-                  if SECRET_NAME.search(n) and not NOT_SECRET.search(n) and len(v) >= 16 and os.sep not in v]
+    proxy_pw = local_proxy_passwords()
+    named = [(n, v) for n, v in os.environ.items()
+             if SECRET_NAME.search(n) and not NOT_SECRET.search(n) and len(v) >= 16 and os.sep not in v]
+    suspicious = [n for n, v in named if v not in proxy_pw]
+    proxy_vars = ["%s: mật khẩu của proxy trên localhost trong HTTPS_PROXY, không tính" % n for n, v in named if v in proxy_pw]
     if os.environ.get("AWS_ACCESS_KEY_ID", "").startswith("AKIA"):
         run.add("cred01.env.static_key", "CRED-01", FAIL, "có credential dài hạn trong biến môi trường", ["AWS_ACCESS_KEY_ID là access key dài hạn (AKIA…)"])
     else:
         run.add("cred01.env.static_key", "CRED-01", PASS, "không thấy access key dài hạn đã biết trong biến môi trường")
     if suspicious:
-        run.add("cred01.env.names", "CRED-01", REVIEW, "biến môi trường có tên giống secret (chỉ in tên, không in giá trị)", sorted(suspicious))
+        run.add("cred01.env.names", "CRED-01", REVIEW, "biến môi trường có tên giống secret (chỉ in tên, không in giá trị)", sorted(suspicious) + sorted(proxy_vars))
     else:
-        run.add("cred01.env.names", "CRED-01", PASS, "không thấy biến môi trường có tên giống secret")
+        run.add("cred01.env.names", "CRED-01", PASS, "không thấy biến môi trường có tên giống secret", sorted(proxy_vars))
     dotenv = []
     skip = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
     base_depth = workspace.rstrip(os.sep).count(os.sep)
@@ -837,7 +1091,8 @@ def build_report(run, args, command):
     return report
 
 
-def print_run(report, out=sys.stdout):
+def print_run(report, out=None):
+    out = out or sys.stdout
     by_control = {}
     for r in report["results"]:
         by_control.setdefault(r["control"], []).append(r)
@@ -981,6 +1236,9 @@ def evaluate(reports, matrix, policy, attestations, today):
     return evaluated, ignored, expired_attest, valid_attest
 
 
+NEXT_LEVELS = {"ASAL-0": ["ASAL-1"], "ASAL-1": ["ASAL-2"], "ASAL-2": ["ASAL-3a", "ASAL-3b"]}
+
+
 def highest(achieved, levels):
     best = "chưa đạt ASAL-0"
     for lvl in ("ASAL-0", "ASAL-1", "ASAL-2"):
@@ -1039,6 +1297,21 @@ def render_markdown(evaluated, matrix, policy, ignored, expired, valid_attest, s
           "Control *cần xem* là control máy thấy dấu hiệu nhưng không tự kết luận được. Cả hai đều chặn việc đạt cấp, "
           "như Mục 0.5 yêu cầu, cho tới khi có xác nhận tay hợp lệ.")
         w()
+        for nxt in NEXT_LEVELS.get(lvl, []):
+            extra = [c for c in controls if controls[c]["levels"].get(nxt) == "required" and c not in req]
+            ok = sum(1 for e in rows if e["achieved"].get(nxt))
+            w("### Cấp kế tiếp: %s" % nxt)
+            w()
+            w("Control bắt buộc thêm ở %s so với %s: %d trên %d máy đạt %s. Use case chưa cam kết cấp này; "
+              "bảng cho biết còn thiếu gì." % (nxt, lvl, ok, len(rows), nxt))
+            w()
+            w("| Control | Đạt | Chưa đạt | Chưa có bằng chứng | Cần xem | Không áp dụng |")
+            w("| :--- | :---: | :---: | :---: | :---: | :---: |")
+            for c in sorted(extra, key=lambda c: (-sum(1 for e in rows if e["status"][c] in (FAIL, "waived")), c)):
+                cnt = lambda st: sum(1 for e in rows if e["status"][c] in st)
+                w("| %s %s | %d | %d | %d | %d | %d |" % (c, controls[c]["name"], cnt((PASS,)), cnt((FAIL, "waived")),
+                                                         cnt((UNTESTED,)), cnt((REVIEW,)), cnt((NA,))))
+            w()
         fails = [(e["host"], r) for e in rows for r in e["results"] if r["status"] == FAIL]
         unapproved = [(e["host"], i) for e in rows for i in e["unapproved"]]
         if fails or unapproved:

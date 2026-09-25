@@ -8,11 +8,13 @@ Mỗi kết quả gắn với một mã control và một mã probe ổn định
 
 | Lệnh | Chạy ở đâu | Làm gì |
 | :--- | :--- | :--- |
-| `collect` | Ngoài sandbox, như người dùng bình thường | Danh mục MCP server và danh tính của chúng (SC-01); cấu hình cấp project (SC-02); `npx -y`, `uvx`, `@latest`, image không ghim digest (SC-03); remote MCP không dùng HTTPS (NET-04). Với Claude Code: `bypassPermissions` ở settings có hiệu lực (ACT-03), `sandbox.enabled` (ISO-02), việc chặn tool file built-in đọc ngoài thư mục làm việc (ISO-03) |
+| `collect` | Ngoài sandbox, như người dùng bình thường | Danh mục MCP server và danh tính của chúng, kể cả server và connector do plugin của Codex và Claude Code mang theo; plugin có hook (SC-01); cấu hình cấp project, kể cả plugin bật từ settings cấp project (SC-02); `npx -y`, `uvx`, `@latest`, image không ghim digest, lệnh khởi động là đường dẫn tương đối (SC-03); remote MCP không dùng HTTPS (NET-04). Với Claude Code: `bypassPermissions` ở settings có hiệu lực (ACT-03), `sandbox.enabled` (ISO-02), việc chặn tool file built-in đọc ngoài thư mục làm việc (ISO-03) |
 | `probe` | **Bên trong** môi trường của agent | Quyền root, sudo không mật khẩu (ISO-01); đọc credential ngoài workspace, đọc qua symlink, ghi ra ngoài workspace, SSH/GPG agent, Docker socket, Keychain, D-Bus (ISO-03); capability, seccomp, no-new-privileges, mount, metadata endpoint trong container (ISO-04); kết nối thẳng tới domain, IPv4, IPv6, UDP, proxy có chặn domain lạ không (NET-01); DNS thẳng qua UDP, TCP, DoT (NET-02); biến môi trường giống secret, file `.env` (CRED-01) |
 | `report` | Máy của người đọc báo cáo | Gom file JSON của `collect` và `probe`, đối chiếu với policy và xác nhận tay, xuất báo cáo Markdown hoặc CSV theo cấp ASAL |
 
 Phần `probe` chỉ có ý nghĩa khi chạy đúng chỗ agent chạy, vì thứ cần đo là tiến trình của agent làm được gì, không phải tài khoản của bạn làm được gì. Chạy `probe` ngoài sandbox thì gần như mọi dòng đều là *Chưa đạt*, và như vậy là đúng.
+
+Ngược lại, `collect` phải chạy ngoài sandbox. Một sandbox tốt giấu `~/.claude/settings.json`, `~/.claude.json` và `~/.codex/config.toml` khỏi tiến trình bên trong. Khi đó `collect` báo *Chưa kiểm được* cho những gì phụ thuộc vào các file ấy, chứ không coi là file không tồn tại.
 
 ## Dùng cho một máy
 
@@ -55,6 +57,8 @@ Mã thoát là 1 nếu có ít nhất một kết quả *Chưa đạt*.
    python3 checks/asal.py report reports/ --policy policy.json --attest attestations.json -o report.md
    ```
 
+   Ngoài các control bắt buộc ở cấp đã cam kết, báo cáo có thêm phần *Cấp kế tiếp*, liệt kê những control bắt buộc thêm ở cấp trên và số máy đã đạt từng control. Ví dụ với cam kết ASAL-0, đây là chỗ thấy được ISO-03 và NET-01, tức là tác dụng của sandbox.
+
 Quy tắc tính cấp, theo Mục 0.5 của guideline:
 - Một cấp chỉ đạt khi mọi control *bắt buộc* ở cấp đó là *Đạt* hoặc *Không áp dụng*.
 - *Chưa kiểm được* và *Cần xem* đều chặn việc đạt cấp, cho tới khi có một xác nhận tay hợp lệ.
@@ -93,7 +97,9 @@ Kết quả chỉ nói về những đường đi đã thử (guideline, Mục 0
 
 Những gì không kiểm tự động được, phải xác nhận tay: xác thực OAuth của remote MCP (NET-04); tool poisoning (SC-04, dùng máy quét); fingerprint tool (SC-05); hạn mức chi tiêu (RES-01); dừng agent và dọn tiến trình con (OBS-04); client có hỏi lại khi cấu hình cấp project thay đổi không (SC-02); UDP 443 (QUIC) riêng lẻ. `probe` coi UDP tới cổng 53 bị chặn là dấu hiệu UDP ra ngoài bị chặn nói chung, nhưng rule firewall theo cổng có thể khác nhau.
 
-Phát hiện biến môi trường giống secret là heuristic theo tên. Một số sandbox tự đặt biến có tên giống secret cho proxy của chính nó, ví dụ `srt` đặt `CLOUDSDK_PROXY_PASSWORD`.
+Phát hiện biến môi trường giống secret là heuristic theo tên. Sandbox lọc mạng qua proxy trên localhost (Claude Code, `srt`) cấp cho mỗi phiên một mật khẩu proxy, và chép nó sang các biến như `CLOUDSDK_PROXY_PASSWORD`. Biến nào có giá trị trùng mật khẩu trong URL `HTTPS_PROXY` trỏ về localhost thì không bị tính là secret, nhưng vẫn được ghi tên trong bằng chứng. Mật khẩu của proxy ở máy khác vẫn bị tính.
+
+**Plugin.** Cách Codex lưu plugin (`~/.codex/plugins/cache/<marketplace>/<tên>/<phiên bản>/.codex-plugin/plugin.json`) được đọc từ một bản cài thật, Codex không có tài liệu về nó. Cách Claude Code lưu plugin theo [tài liệu](https://code.claude.com/docs/en/plugins/loading.md). Plugin đang bật mà không đọc được thì `collect` báo *Cần xem*, không bỏ qua. Tài liệu của Claude Code không nói hook của plugin chạy trong hay ngoài sandbox; hook trong settings thì chạy ngoài, theo phép thử ở bảng cuối trang, nên `asal` coi hook của plugin là chạy ngoài sandbox.
 
 ## Môi trường cố ý cấu hình sai
 
@@ -117,6 +123,7 @@ Chạy trên máy mình: `checks/fixtures/run-macos.sh` (macOS) và `checks/fixt
 | macOS, `sandbox-exec` và `srt` 0.0.77 | Bốn fixture macOS đạt |
 | Container Linux trên Docker Desktop 29 (Debian bookworm) | Bốn fixture container đạt |
 | macOS, Claude Code 2.1.273, sandbox bật, probe qua tool Bash | Đã thử: với `denyRead: ["~/.ssh"]`, `~/.ssh`, mạng thẳng, ghi vào home và SSH agent đều bị chặn, **nhưng `~/.config/gh/hosts.yml`, `~/.docker/config.json` và lịch sử shell vẫn đọc được**, vì sandbox mặc định cho đọc mọi nơi trừ `denyRead`. Với [`examples/claude-code`](../examples/claude-code/README.md) thì mọi phép thử đạt |
+| macOS, máy dev thật có credential thật, Claude Code với `sandbox.enabled`, `allowUnsandboxedCommands: false`, `blockReadsOutsideWorkingDirectories` và `disableBypassPermissionsMode` ở settings user (25/09/2026) | Trước khi bật: 12 dòng *Chưa đạt* (đọc được `~/.ssh`, `~/.docker/config.json`, `~/.config/gh/hosts.yml`, lịch sử shell; nối được Docker socket và SSH agent; ghi được vào home; TCP, UDP, IPv6, DNS và DoT đi thẳng). Sau khi bật: 0 dòng *Chưa đạt*; proxy của sandbox trả `403` cho domain ngoài allowlist. Keychain chưa thử. Cũng từ máy này: `collect` bỏ sót server do plugin Codex mang theo, và chạy `collect` trong sandbox cho kết quả sai; cả hai đã sửa ở 0.1.1 |
 | macOS, Claude Code 2.1.273, probe qua hook `SessionStart` | Đã thử: mọi dòng ISO-03, NET-01, NET-02 *Chưa đạt*. Hook chạy ngoài sandbox; không dùng hook để chạy `probe` |
 | Linux với bubblewrap, `srt` hay Landlock trên máy thật | Chưa thử |
 | Windows, WSL2, Windows Sandbox | Chưa thử |
