@@ -11,6 +11,9 @@ Phiên bản của guideline theo dạng `MAJOR.MINOR.PATCH`. Mỗi phiên bản
   - File cấu hình bị sandbox giấu thành *Chưa kiểm được* thay vì bị coi là không có. Trước đây chạy `collect` trong sandbox cho ISO-02 *Chưa đạt* và SC-01 *Không áp dụng*, cả hai đều sai.
   - Mật khẩu proxy của sandbox (biến có giá trị trùng mật khẩu trong `HTTPS_PROXY` trỏ về localhost) không bị tính là secret ở CRED-01.
   - `report` có thêm phần *Cấp kế tiếp*.
+  - Đọc cấu hình MCP của Antigravity và opencode (v1 và v2, JSONC); server tắt (`enabled: false`, `disabled: true`) không tính; file cấu hình rỗng không còn bị báo là không đọc được.
+  - File token của chính các agent (Codex, Claude Code trên Linux, Gemini và Antigravity, opencode) vào danh sách credential của ISO-03.
+  - Client agent khác có trên máy thành *Cần xem* ở ISO-02; Antigravity CLI tắt sandbox hay chạy tool không hỏi thành *Chưa đạt*.
 - `examples/claude-code/`: settings của Claude Code đã kiểm thử.
 - `TOOLS.md`: bảng "Công cụ đóng boundary nào".
 

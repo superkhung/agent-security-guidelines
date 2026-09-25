@@ -210,11 +210,21 @@ def mcp_config_files(workspace):
         ("Claude Desktop", os.path.join(appdata, "Claude", "claude_desktop_config.json") if appdata else "", "user", "mcpServers"),
         ("Cursor", os.path.join(HOME, ".cursor", "mcp.json"), "user", "mcpServers"),
         ("Codex CLI", os.path.join(HOME, ".codex", "config.toml"), "user", "codex_toml"),
+        # https://antigravity.google/docs/mcp/ (shared by Antigravity 2.0, IDE and CLI)
+        ("Antigravity", os.path.join(HOME, ".gemini", "config", "mcp_config.json"), "user", "mcpServers"),
+        # https://opencode.ai/docs/config/, https://opencode.ai/v2/docs/config
+        ("opencode", os.path.join(HOME, ".config", "opencode", "opencode.json"), "user", "opencode"),
+        ("opencode", os.path.join(HOME, ".config", "opencode", "opencode.jsonc"), "user", "opencode"),
     ]
     project = [
         ("Claude Code", os.path.join(workspace, ".mcp.json"), "project", "mcpServers"),
         ("Cursor", os.path.join(workspace, ".cursor", "mcp.json"), "project", "mcpServers"),
         ("VS Code", os.path.join(workspace, ".vscode", "mcp.json"), "project", "servers"),
+        ("Antigravity", os.path.join(workspace, ".agents", "mcp_config.json"), "project", "mcpServers"),
+        ("opencode", os.path.join(workspace, "opencode.json"), "project", "opencode"),
+        ("opencode", os.path.join(workspace, "opencode.jsonc"), "project", "opencode"),
+        ("opencode", os.path.join(workspace, ".opencode", "opencode.json"), "project", "opencode"),
+        ("opencode", os.path.join(workspace, ".opencode", "opencode.jsonc"), "project", "opencode"),
     ]
     # A file hidden by a sandbox is kept, so that reading it fails loudly instead of the
     # location counting as empty.
@@ -402,12 +412,80 @@ def plugin_sources(workspace):
     return found
 
 
+def strip_jsonc(text):
+    """JSON with comments and trailing commas (opencode .jsonc) to plain JSON."""
+    out, i, n, in_str = [], 0, len(text), False
+    while i < n:
+        c = text[i]
+        if in_str:
+            out.append(c)
+            if c == "\\" and i + 1 < n:
+                out.append(text[i + 1])
+                i += 1
+            elif c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True
+            out.append(c)
+        elif text.startswith("//", i):
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+            continue
+        else:
+            out.append(c)
+        i += 1
+    return re.sub(r",(\s*[}\]])", r"\1", "".join(out))
+
+
+def _opencode_servers(data):
+    """opencode "mcp": v1 {name: server}, v2 {"servers": {name: server}}. A local server's command
+    is one array; v1 turns a server off with enabled: false, v2 with disabled: true."""
+    mcp = data.get("mcp") if isinstance(data.get("mcp"), dict) else {}
+    inner = mcp.get("servers")
+    if isinstance(inner, dict) and not {"type", "command", "url"} & set(inner):
+        mcp = inner
+    servers = {}
+    for name, srv in mcp.items():
+        if not isinstance(srv, dict):
+            continue
+        srv = dict(srv)
+        cmd = srv.get("command")
+        if isinstance(cmd, list):
+            srv["command"], srv["args"] = (str(cmd[0]), [str(a) for a in cmd[1:]]) if cmd else ("", [])
+        servers[name] = srv
+    return servers
+
+
+def _normalize(servers):
+    """Field names that differ between clients, mapped to the ones pin_status and collect read:
+    Antigravity serverUrl and Gemini httpUrl to url; disabled: true to enabled: false."""
+    for srv in servers.values():
+        if isinstance(srv, dict):
+            if not srv.get("url") and (srv.get("serverUrl") or srv.get("httpUrl")):
+                srv["url"] = srv.get("serverUrl") or srv.get("httpUrl")
+            if srv.get("disabled") is True:
+                srv["enabled"] = False
+    return servers
+
+
 def load_servers(path, loader):
     with open(path, encoding="utf-8") as f:
         text = f.read()
+    if not text.strip():
+        return {}  # Antigravity creates an empty mcp_config.json before any server is added.
     if loader == "codex_toml":
         return parse_codex_toml(text)
+    if loader == "opencode":
+        return _normalize(_opencode_servers(json.loads(strip_jsonc(text))))
     data = json.loads(text)
+    return _normalize(_load_json_servers(data, loader))
+
+
+def _load_json_servers(data, loader):
     if loader == "claude_json":
         servers = dict(data.get("mcpServers") or {})
         # Servers added per project with "local" scope live under projects.<path>.mcpServers.
@@ -525,7 +603,7 @@ def server_identity(server):
 
 def collect_mcp(run, workspace):
     files = mcp_config_files(workspace)
-    project, pins, remotes, unread = [], [], [], []
+    project, pins, remotes, unread, disabled = [], [], [], [], []
     for client, path, scope, loader in files:
         try:
             servers = load_servers(path, loader)
@@ -536,6 +614,9 @@ def collect_mcp(run, workspace):
         for name, srv in servers.items():
             srv = srv if isinstance(srv, dict) else {}
             where = "%s: %s" % (tilde(path), name)
+            if srv.get("enabled") is False:
+                disabled.append(where)
+                continue
             st, why = pin_status(srv)
             run.inventory.append({"client": client, "config": tilde(path), "scope": scope, "name": name,
                                   "identity": server_identity(srv), "remote": bool(srv.get("url")),
@@ -548,7 +629,7 @@ def collect_mcp(run, workspace):
                 remotes.append((where, str(srv["url"]), str(srv.get("type") or srv.get("transport") or "")))
 
     plugins = plugin_sources(workspace)
-    unreadable, hooks, disabled = [], [], []
+    unreadable, hooks = [], []
     for p in plugins:
         label = "%s plugin %s" % (p["client"], p["plugin"])
         if p["error"]:
@@ -650,8 +731,16 @@ def claude_code_settings(workspace):
     return found
 
 
+# Tokens that agent clients keep for themselves. A command the agent runs can read another
+# agent's token (or its own) and use it from elsewhere; the client process needs the file, the
+# sandboxed tools do not.
+AGENT_TOKENS = [".codex/auth.json", ".claude/.credentials.json", ".gemini/oauth_creds.json",
+                ".gemini/jetski-standalone-oauth-token", ".gemini/antigravity/mcp_oauth_tokens.json",
+                ".local/share/opencode/auth.json", ".local/share/opencode/mcp-auth.json",
+                ".config/opencode/service.json"]
+
 CREDENTIAL_READ = [".ssh", ".aws", ".config/gcloud", ".azure", ".kube", ".docker", ".gnupg",
-                   ".netrc", ".git-credentials", ".config/gh"]
+                   ".netrc", ".git-credentials", ".config/gh"] + AGENT_TOKENS
 
 
 def _section(data, key):
@@ -739,10 +828,69 @@ def collect_claude_code(run, workspace):
         run.add("iso03.claude.file_tools", "ISO-03", PASS, "có deny rule Read(...) cho các vị trí credential có trên máy (tool file built-in của Claude Code)", kind="config")
 
 
+# Agent clients whose sandbox and approval settings asal does not read yet: the paths that show
+# one is installed, and what the vendor's docs say. Claude Code is checked by collect_claude_code.
+OTHER_CLIENTS = [
+    ("Codex", [".codex"], ["codex"], ""),
+    ("opencode", [".config/opencode", ".local/share/opencode", ".opencode/bin/opencode"], ["opencode"],
+     "tài liệu không mô tả sandbox cho lệnh shell, và phần lớn quyền mặc định là allow; chạy cả client trong container hay VM (ISO-04)"),
+    ("Antigravity", [".gemini/antigravity", ".gemini/antigravity-cli", "/Applications/Antigravity.app"], ["agy", "antigravity"],
+     "sandbox bật mặc định trên macOS và Linux, nhưng preset Turbo và Request Review tắt nó; cấu hình của IDE không có đường dẫn trong tài liệu"),
+    ("Cursor", [".cursor", "/Applications/Cursor.app"], ["cursor-agent"], ""),
+    ("Gemini CLI", [".gemini/settings.json"], ["gemini"], ""),
+]
+
+
+def other_clients():
+    found = []
+    for name, paths, commands, note in OTHER_CLIENTS:
+        seen = []
+        for p in [p if os.path.isabs(p) else os.path.join(HOME, *p.split("/")) for p in paths] + \
+                 [shutil.which(c) for c in commands]:
+            if p and p not in seen and path_state(p) != "absent":
+                seen.append(p)
+        if seen:
+            found.append("%s: %s%s" % (name, ", ".join(tilde(p) for p in seen), (" (%s)" % note) if note else ""))
+    return found
+
+
+def collect_antigravity_cli(run):
+    """ISO-02 and ACT-03 from ~/.gemini/antigravity-cli/settings.json, the one Antigravity settings
+    file with a documented path and keys (https://antigravity.google/docs/settings/,
+    https://antigravity.google/docs/sandbox/). Only settings that turn protection off are judged;
+    leaving a key out keeps the documented default."""
+    path = os.path.join(HOME, ".gemini", "antigravity-cli", "settings.json")
+    if path_state(path) == "absent":
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.loads(strip_jsonc(f.read()) or "{}")
+    except (OSError, ValueError) as e:
+        run.add("iso02.antigravity_cli.sandbox", "ISO-02", UNTESTED, "không đọc được settings của Antigravity CLI", ["%s: %s" % (tilde(path), e)], kind="config")
+        return
+    if data.get("enableTerminalSandbox") is False:
+        run.add("iso02.antigravity_cli.sandbox", "ISO-02", FAIL, "Antigravity CLI tắt sandbox của terminal (enableTerminalSandbox = false)", [tilde(path)], kind="config")
+    if data.get("toolPermission") == "always-proceed":
+        run.add("act03.antigravity_cli.always_proceed", "ACT-03", FAIL, "Antigravity CLI chạy tool không hỏi (toolPermission = always-proceed); chỉ chấp nhận khi cả client chạy trong container (ISO-04)", [tilde(path)], kind="config")
+
+
+def collect_other_clients(run):
+    """ISO-02 for clients asal cannot judge. A sandboxed Claude Code says nothing about another
+    agent on the same machine, so each one found is review until someone checks it or attests
+    that the use case does not use it."""
+    found = other_clients()
+    if found:
+        run.add("iso02.other_clients", "ISO-02", REVIEW,
+                "trên máy còn %d client agent mà asal chưa kiểm sandbox và phê duyệt; kiểm tay, hoặc ghi xác nhận tay "
+                "rằng use case không dùng chúng" % len(found), found, kind="config")
+
+
 def do_collect(run, args):
     workspace = os.path.abspath(args.workspace)
     collect_mcp(run, workspace)
     collect_claude_code(run, workspace)
+    collect_antigravity_cli(run)
+    collect_other_clients(run)
 
 
 # ----------------------------------------------------------------------------------------
@@ -750,7 +898,7 @@ def do_collect(run, args):
 
 SENSITIVE = [".ssh", ".aws", ".config/gcloud", ".azure", ".kube", ".docker/config.json", ".gnupg",
              ".netrc", ".git-credentials", ".bash_history", ".zsh_history",
-             ".config/gh/hosts.yml", ".npmrc", ".pypirc"]
+             ".config/gh/hosts.yml", ".npmrc", ".pypirc"] + AGENT_TOKENS
 BROWSER = ["Library/Application Support/Google/Chrome", "Library/Application Support/Firefox",
            ".config/google-chrome", ".mozilla/firefox", "AppData/Local/Google/Chrome/User Data"]
 

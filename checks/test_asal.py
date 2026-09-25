@@ -232,10 +232,82 @@ class Plugins(TempHome):
         self.assertEqual(res["sc01.inventory"]["status"], asal.UNTESTED)
         self.assertEqual(res["sc03.launch"]["status"], asal.UNTESTED)
 
+    def test_empty_config_file_has_no_servers(self):
+        path = os.path.join(self.home, ".cursor", "mcp.json")
+        os.makedirs(os.path.dirname(path))
+        open(path, "w").close()
+        _, res = self.collect()
+        self.assertNotIn("sc01.config.unreadable", res)
+        self.assertEqual(res["sc01.inventory"]["status"], asal.NA)
+
     def test_no_plugins_no_plugin_results(self):
         _, res = self.collect()
         self.assertNotIn("sc01.plugins", res)
         self.assertNotIn("sc01.plugin.hooks", res)
+
+
+class OtherClients(TempHome):
+    def run_collect(self):
+        # Only home-relative locations: /Applications depends on the machine running the tests.
+        clients = [(n, [p for p in paths if not os.path.isabs(p)], cmds, note) for n, paths, cmds, note in asal.OTHER_CLIENTS]
+        run = asal.Run()
+        with mock.patch.dict(os.environ, {"PATH": self.tmp}), mock.patch.object(asal, "OTHER_CLIENTS", clients):
+            asal.collect_other_clients(run)
+        return run.results
+
+    def test_other_agent_clients_are_review(self):
+        os.makedirs(os.path.join(self.home, ".config", "opencode"))
+        os.makedirs(os.path.join(self.home, ".gemini", "antigravity"))
+        results = self.run_collect()
+        self.assertEqual([(r["probe"], r["status"]) for r in results], [("iso02.other_clients", asal.REVIEW)])
+        self.assertEqual([e.split(":")[0] for e in results[0]["evidence"]], ["opencode", "Antigravity"])
+
+    def test_claude_code_alone_adds_nothing(self):
+        self.assertEqual(self.run_collect(), [])
+
+
+class OtherClientConfigs(TempHome):
+    def collect(self):
+        run = asal.Run()
+        asal.collect_mcp(run, self.ws)
+        return run, {r["probe"]: r for r in run.results}
+
+    def test_opencode_v1_and_v2(self):
+        os.makedirs(os.path.join(self.home, ".config", "opencode"))
+        with open(os.path.join(self.home, ".config", "opencode", "opencode.jsonc"), "w") as f:
+            f.write('{\n  // v1\n  "mcp": {\n    "fs": {"type": "local", "command": ["npx", "-y", "@scope/fs@1.0.0"]},\n'
+                    '    "off": {"type": "local", "command": ["npx", "x"], "enabled": false},\n'
+                    '    "docs": {"type": "remote", "url": "http://docs.example/mcp"}, /* trailing comma */\n  },\n}\n')
+        self.write(os.path.join(self.ws, "opencode.json"),
+                   {"mcp": {"servers": {"git": {"type": "local", "command": ["uvx", "mcp-server-git"]},
+                                        "old": {"type": "local", "command": ["/x"], "disabled": True}}}})
+        run, res = self.collect()
+        self.assertEqual(sorted(i["identity"] for i in run.inventory),
+                         ["pkg:npm:@scope/fs@1.0.0", "pkg:pypi:mcp-server-git", "url:http://docs.example/mcp"])
+        self.assertEqual(res["sc03.launch"]["status"], asal.FAIL)
+        self.assertEqual(res["net04.remote.https"]["status"], asal.FAIL)
+        self.assertEqual(res["sc02.project.config"]["status"], asal.REVIEW)
+        self.assertEqual(len([e for e in res["sc01.inventory"]["evidence"] if e.startswith("tắt, không tính")]), 2)
+
+    def test_antigravity_server_url(self):
+        os.makedirs(os.path.join(self.home, ".gemini", "config"))
+        self.write(os.path.join(self.home, ".gemini", "config", "mcp_config.json"),
+                   {"mcpServers": {"k": {"serverUrl": "https://mcp.example/k"}, "d": {"command": "/d", "disabled": True}}})
+        run, _ = self.collect()
+        self.assertEqual([i["identity"] for i in run.inventory], ["url:https://mcp.example/k"])
+
+    def test_antigravity_cli_settings(self):
+        path = os.path.join(self.home, ".gemini", "antigravity-cli", "settings.json")
+        os.makedirs(os.path.dirname(path))
+        self.write(path, {"enableTerminalSandbox": False, "toolPermission": "always-proceed"})
+        run = asal.Run()
+        asal.collect_antigravity_cli(run)
+        self.assertEqual({r["probe"]: r["status"] for r in run.results},
+                         {"iso02.antigravity_cli.sandbox": asal.FAIL, "act03.antigravity_cli.always_proceed": asal.FAIL})
+        self.write(path, {"toolPermission": "request-review"})
+        run = asal.Run()
+        asal.collect_antigravity_cli(run)
+        self.assertEqual(run.results, [])
 
 
 class EnvSecrets(TempHome):
