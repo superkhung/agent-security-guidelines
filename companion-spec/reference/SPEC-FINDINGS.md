@@ -1,12 +1,12 @@
-# Findings from the first implementation of aab-00
+# Findings from the reference implementation
 
-Writing `reference-python-1` turned up the places below where `aab-00` is ambiguous, contradictory, or silent. The spec is frozen for the comment round, so none of these has been applied to it. They are input for `aab-01`. Each item lists what the code does today; the code marks the spot with `# SPEC-AMBIGUITY:` (`grep -rn SPEC-AMBIGUITY companion-spec/reference/python`).
+Writing `reference-python-1` turned up the places below where `aab-00` is ambiguous, contradictory, or silent (F-1..F-45); designing and reviewing `aab-01` added F-46..F-56. Each item lists what the code does today; the code marks the spot with `# SPEC-AMBIGUITY:` (`grep -rn SPEC-AMBIGUITY companion-spec/reference/python`).
 
 Where the spec is silent, the code sometimes rejects more than the spec requires. No generated vector depends on those extra rejections.
 
 Items marked **resolved in aab-01** are fixed in [`agent-action-binding-draft-01.md`](../agent-action-binding-draft-01.md); Appendix A.2 of that draft lists each change. `aab-00` itself stays unchanged (git tag `aab-00`).
 
-Comments on any item: open an Issue with the "Companion spec (aab)" template and the item number, for example `[aab-00] F-3`.
+Comments on any item: open an Issue with the "Companion spec (aab)" template and the item number, for example `[aab-01] F-47`.
 
 ## Design problems (fix before anything else)
 
@@ -103,3 +103,22 @@ Comments on any item: open an Issue with the "Companion spec (aab)" template and
 | # | Section | Problem | Resolution |
 | :--- | :--- | :--- | :--- |
 | F-46 | 7.1, 11 | Container `version` is a uint, `0` for `aab-00`, and Section 11 gives the frozen `aab-1` `version = 1`, which is also the number of draft `aab-01`. | **Resolved in aab-01**: `version` is the text label of the domain prefix (`"01"`; frozen `"1"`) |
+
+## Found in the review of aab-01
+
+Open items from the whole-branch review of `aab-01` (PR #25), and three behaviours carried over unchanged from `aab-00` that the review set aside as out of scope. Input for the next draft.
+
+| # | Section | Problem | Code today | Proposed fix |
+| :--- | :--- | :--- | :--- | :--- |
+| F-47 | 7.2 | The credential registry is still described as holding "the last seen signature counter", while step 8 needs a base counter and an acceptance history. | Base counter plus history (`Credential.counter`, `Credential.history`) | Describe the registry as in step 8 |
+| F-48 | 8.4 | Step 5 runs "steps 5–8 of Section 7.2", and the atomic step runs step 8 again. | Runs step 8 once, in the atomic step | Make step 5 read "steps 5–7" |
+| F-49 | 13.5 | The residual risk of the step 8 rule is not stated: a cloned authenticator that presents an unused value between `c_snap` and `c_max`, for a pending entry created before the higher value was accepted, is accepted, and with a global-counter authenticator it is never detected later. | As specified | State the trade-off in 13.5 |
+| F-50 | 10, A.2, 6.1 | The error table cites 5.1, 6.1 and 8.1 for `E_NOT_CANONICAL`, which do not mention it, while A.2 cites 4.3 and 10. The order between `E_NOT_CANONICAL` and 6.1's `E_JSON` for non-object arguments is not given. | `[1,2]` as arguments gives `E_NOT_CANONICAL` only if not canonical, else `E_JSON` | Align the references; state the order |
+| F-51 | B | The step 8 boundaries have unit tests but no vectors: the `t = max(not_before, now − 360 000)` clamp, `accepted_at = t`, and an `aab-00` container with uint `version` `0`. | Unit tests only | Add vectors |
+| F-52 | 7.2 step 8 | `now` is taken when a verification starts, but folding old history into the base uses the committing verification's `now`. If one verification runs longer than about 30 s while another commits, an entry it should see in `later` may already be in the base, so its result is stricter than an implementation that keeps the full history. | Folds at commit time | Require that folding never passes `now − 360 000` of any verification in progress, or fold relative to the oldest one |
+| F-53 | 9.3, 9.6, 13.6 | A log key's validity period is checked against the checkpoint's own `time`, which the signer chooses, so a retired or leaked log key can sign back-dated checkpoints. Anchoring (9.4) limits this but the spec does not say so. | As specified | Say in 13.6 that key validity is only as good as anchoring; consider checking against the anchoring time |
+| F-54 | 7.3, 9.3 | A COSE_Sign1 protected header with `crit` (label 2) is not addressed, for device-key evidence and for checkpoints. | Ignores `crit` | Reject `crit`, or list the labels a verifier must understand |
+| F-55 | 7.2 step 4, 8.4 step 4 | Action classes (`tool_classes`) are looked up by tool name, not by (server identity, name), so two servers with a tool of the same name share a class. | By name | Key the classification by server identity and name |
+| F-56 | 8.1, 8.4 | A lease with zero tool entries is accepted and skips the authorization check of step 4. | Accepted | Require at least one tool entry (`E_VALUE`) |
+
+Editorial, to fix with the next draft: the ACT-018 vector `description` keeps the `aab-00` wording; a few code comments still give pre-`aab-01` check numbers.
