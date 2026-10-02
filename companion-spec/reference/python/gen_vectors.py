@@ -162,10 +162,13 @@ def sign_cose(key: str, prot_b: bytes, payload: bytes, fmt: str = "raw") -> byte
 
 
 def cred(cred_id=CRED_ID, approver="alice@example.internal", key=None, be=False, counter=5,
-         user_handle=USER_HANDLE, classes=("read", "write")):
-    return {"id_hex": cred_id.hex(), "approver": approver, "user_handle_hex": user_handle.hex(),
-            "be": be, "counter": counter, "classes": list(classes), "revoked": False,
-            "cose_key": key or KEY_ES256}
+         user_handle=USER_HANDLE, classes=("read", "write"), history=None):
+    c = {"id_hex": cred_id.hex(), "approver": approver, "user_handle_hex": user_handle.hex(),
+         "be": be, "counter": counter, "classes": list(classes), "revoked": False,
+         "cose_key": key or KEY_ES256}
+    if history is not None:
+        c["history"] = [list(h) for h in history]
+    return c
 
 
 def build_action(seq=7, session=SESSION, audience=PROXY, args=ARGS_D2, nb=NB, na=NA, approver=None,
@@ -629,13 +632,13 @@ def gen_act():
         catalogue=reject("E_DIGEST_MISMATCH"))
     rec_a, rec_b = build_action(seq=8), build_action(seq=9)
     vec("ACT-018", "Two approvals pending at once; the later sequence is approved and executed first", "evidence",
-        inp={"presentations": [container(rec_b, ad=auth_data(count=6)).hex(),
-                               container(rec_a, ad=auth_data(count=7)).hex()]},
+        inp={"presentations": [container(rec_b, ad=auth_data(count=12)).hex(),
+                               container(rec_a, ad=auth_data(count=11)).hex()]},
         ctx=base_context(pending_for(rec_a, seq=8) + pending_for(rec_b, seq=9)), pending=NEEDS_CRYPTO,
         catalogue={"presentations": [ACCEPT, ACCEPT]}, extra=dict(KEYS_EXTRA, proxy_only=True),
-        note="The authenticator signs sequence 9 first (signCount 6), then sequence 8 (signCount 7). If the "
-             "two assertions were presented in the opposite order of signing, step 8 (counter) would reject "
-             "the second one although Section 6.2 allows any completion order (finding F-1).")
+        note="The authenticator signs sequence 8 first (signCount 11), then sequence 9 (signCount 12); "
+             "sequence 9 is presented first. Both are accepted: 11 is compared with the counter as of the "
+             "record's not_before (5), not with the 12 accepted since (Section 7.2 step 8, finding F-1).")
     vec("ACT-019", "Agent request with params._meta and an extra params member", "forwarding",
         inp={"record_hex": rec.hex(),
              "request_json_text": request_text(extra=',"_meta":{"progressToken":"p1"},"cursor":"x"')},
@@ -703,6 +706,16 @@ def gen_wa():
     ctx15 = base_context(pending_for(rec), creds=[cred(counter=0)])
     vec("WA-015", "Stored counter 0, received 0", "evidence", inp=ev(rec, ad=auth_data(count=0)), ctx=ctx15,
         pending=NEEDS_CRYPTO, extra=extra, catalogue=ACCEPT)
+    ctx30 = base_context(pending_for(rec), creds=[cred(history=[(NOW - 1000, 9)])])
+    vec("WA-030", "Counter equal to a value accepted after not_before", "evidence",
+        inp=ev(rec, ad=auth_data(count=9)), ctx=ctx30, pending=NEEDS_CRYPTO, extra=extra,
+        catalogue=reject("E_WA_COUNTER"),
+        note="Base counter 5; 9 was accepted after the record's not_before, so 9 is a value already used.")
+    ctx31 = base_context(pending_for(rec), creds=[cred(history=[(NB - 1000, 9)])])
+    vec("WA-031", "Counter not above the snapshot at not_before", "evidence",
+        inp=ev(rec, ad=auth_data(count=8)), ctx=ctx31, pending=NEEDS_CRYPTO, extra=extra,
+        catalogue=reject("E_WA_COUNTER"),
+        note="9 was accepted before the record's not_before, so the snapshot is 9 and 8 is not above it.")
     vec("WA-016", "Unknown credential id", "evidence", inp=ev(rec, cred_id=bytes.fromhex("ee" * 16)), ctx=ctx,
         catalogue=reject("E_CREDENTIAL"), note=pre % "4", extra=extra)
     good = cbor.decode(container(rec))

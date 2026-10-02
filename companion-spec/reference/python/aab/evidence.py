@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Tuple
 
 from . import action as action_mod
 from . import cbor, jsonstrict, sigs
@@ -21,6 +21,7 @@ from .errors import (
     E_CREDENTIAL,
     E_DIGEST_MISMATCH,
     E_JSON,
+    E_REPLAY,
     E_WA_AUTHDATA,
     E_WA_CHALLENGE,
     E_WA_COUNTER,
@@ -43,18 +44,29 @@ _ALLOWED = {WEBAUTHN: _REQUIRED[WEBAUTHN] | {8}, DEVICE_KEY: _REQUIRED[DEVICE_KE
 
 UP, UV, BE, BS, AT, ED = 0x01, 0x04, 0x08, 0x10, 0x40, 0x80
 
+# Section 7.2 step 8: accepted counters are kept at least this long
+# (validity window 300 000 ms plus twice the skew allowance).
+RETENTION_MS = 360_000
+
 
 class Credential:
-    """One entry of the verifier's credential registry (Section 7.2)."""
+    """One entry of the verifier's credential registry (Section 7.2).
+
+    ``counter`` is the base value: the counter at registration, raised by
+    acceptances older than :data:`RETENTION_MS`. ``history`` holds the
+    ``(accepted_at_ms, counter)`` pairs of the acceptances kept.
+    """
 
     def __init__(self, cred_id: bytes, approver: str, key: dict, user_handle: Optional[bytes] = None,
-                 be: bool = False, counter: int = 0, classes: Iterable[str] = (), revoked: bool = False):
+                 be: bool = False, counter: int = 0, classes: Iterable[str] = (), revoked: bool = False,
+                 history: Iterable[Tuple[int, int]] = ()):
         self.id = cred_id
         self.approver = approver
         self.key = key
         self.user_handle = user_handle
         self.be = be
         self.counter = counter
+        self.history = [tuple(h) for h in history]
         self.classes = set(classes)
         self.revoked = revoked
 
@@ -223,15 +235,26 @@ def webauthn_tail(ctx: ApprovalContext, m: dict, ref: DigestRef, cred: Credentia
         sigs.verify(cred.key, message, m[7], WEBAUTHN, ctx.backend, ctx.accept_rs256)
     except sigs.SignatureFailure as exc:
         raise AabError(E_WA_SIGNATURE, str(exc))
-    count = info["sign_count"]
-    # SPEC-AMBIGUITY: 7.2 step 8 vs 6.2 rule 1: approvals may complete in any
-    # order, but with a counter-using authenticator two assertions signed as
-    # (n, n+1) and presented as (n+1, n) make the second fail E_WA_COUNTER.
-    # The spec also does not say how the counter update and the pending-entry
-    # compare-and-delete are made atomic together. We apply step 8 as written.
-    if (cred.counter != 0 or count != 0) and not count > cred.counter:
-        raise AabError(E_WA_COUNTER, "signCount %d not greater than %d" % (count, cred.counter))
-    return count
+    return info["sign_count"]   # step 8 runs in the atomic step (counter_ok)
+
+
+def counter_ok(cred: Credential, received: int, not_before: int, now: int) -> bool:
+    """Step 8 of Section 7.2: compare with the snapshot at ``not_before``."""
+    t = max(not_before, now - RETENTION_MS)
+    c_max = max([cred.counter] + [c for _, c in cred.history])
+    if c_max == 0 and received == 0:
+        return True
+    c_snap = max([cred.counter] + [c for at, c in cred.history if at <= t])
+    later = {c for at, c in cred.history if at > t}
+    return received > c_snap and received not in later
+
+
+def commit_counter(cred: Credential, received: int, now: int) -> None:
+    """Record an accepted counter; fold acceptances older than RETENTION_MS into the base."""
+    cutoff = now - RETENTION_MS
+    old = [c for at, c in cred.history if at < cutoff]
+    cred.counter = max([cred.counter] + old)
+    cred.history = [(at, c) for at, c in cred.history if at >= cutoff] + [(now, received)]
 
 
 # --- steps 2-8 of Section 7.3: device key -----------------------------------
@@ -308,7 +331,13 @@ def verify_action(data: bytes, ctx: ApprovalContext) -> dict:
         count = webauthn_tail(ctx, m, ref, cred)                 # steps 5-8
     else:
         device_key_tail(ctx, m, cred)                            # 7.3 steps 2-8
+    # One atomic step (Section 6.2 rule 5, 7.2): check the pending entry and
+    # the counter, then consume and commit; nothing changes if either fails.
+    if state.pending.get((rec["session"], rec["sequence"])) != m[3]:
+        raise AabError(E_REPLAY, "pending entry already consumed")
+    if count is not None and not counter_ok(cred, count, rec["not_before"], state.now):
+        raise AabError(E_WA_COUNTER, "signCount %d not above the snapshot or already used" % count)
     state.consume(rec["session"], rec["sequence"], m[3])
     if count is not None:
-        cred.counter = count
+        commit_counter(cred, count, state.now)
     return {"record": rec, "digest": ref}

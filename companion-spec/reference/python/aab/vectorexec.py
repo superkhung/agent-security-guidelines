@@ -79,7 +79,8 @@ def build_approval_context(ctx: dict) -> evidence.ApprovalContext:
         creds.append(evidence.Credential(
             bytes.fromhex(c["id_hex"]), c["approver"], _cose_key(c["cose_key"]),
             user_handle=_hex(c.get("user_handle_hex")), be=c.get("be", False),
-            counter=c.get("counter", 0), classes=c.get("classes", []), revoked=c.get("revoked", False)))
+            counter=c.get("counter", 0), classes=c.get("classes", []), revoked=c.get("revoked", False),
+            history=[tuple(h) for h in c.get("history", [])]))
     return evidence.ApprovalContext(
         build_state(ctx), creds, tool_classes=ctx.get("tool_classes"), rp_id=ctx.get("rp_id", ""),
         allowed_origins=ctx.get("allowed_origins", []), forbid_synced=ctx.get("forbid_synced", False),

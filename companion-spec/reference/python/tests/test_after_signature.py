@@ -14,6 +14,7 @@ import unittest
 
 import context
 from aab import evidence
+from aab.errors import AabError
 from aab.vectorexec import execute
 
 ACCEPT_ALL = context.AcceptAll
@@ -68,6 +69,75 @@ class WebAuthnAfterSignature(unittest.TestCase):
         self.assertEqual(out["presentations"][1]["error"], "E_REPLAY")
         out = run("ACT-018", ACCEPT_ALL())
         self.assertEqual([p["result"] for p in out["presentations"]], ["accept", "accept"])
+
+
+NOW, NB = 1790000060000, 1790000000000
+
+
+def credential(base=5, history=()):
+    return evidence.Credential(b"c", "alice", {}, counter=base, history=history)
+
+
+class Counter(unittest.TestCase):
+    """F-1: counter compared with the snapshot at not_before (Section 7.2 step 8)."""
+
+    def ok(self, cred, received, not_before=NB):
+        return evidence.counter_ok(cred, received, not_before, NOW)
+
+    def test_out_of_order_presentation(self):
+        self.assertTrue(self.ok(credential(history=[(NOW, 12)]), 11))
+
+    def test_value_reused_after_snapshot(self):
+        self.assertFalse(self.ok(credential(history=[(NOW - 1000, 9)]), 9))
+
+    def test_below_snapshot(self):
+        self.assertFalse(self.ok(credential(history=[(NB - 1000, 9)]), 8))
+        self.assertFalse(self.ok(credential(history=[(NB - 1000, 9)]), 9))
+        self.assertTrue(self.ok(credential(history=[(NB - 1000, 9)]), 10))
+
+    def test_zero_counters(self):
+        self.assertTrue(self.ok(credential(base=0), 0))
+        self.assertFalse(self.ok(credential(base=10), 0))
+
+    def test_snapshot_clamped_to_retention(self):
+        cred = credential(history=[(NOW - 100_000, 9)])
+        self.assertFalse(self.ok(cred, 9, not_before=NOW - 7_200_000))
+        self.assertTrue(self.ok(cred, 10, not_before=NOW - 7_200_000))
+
+    def test_commit_folds_old_entries(self):
+        cred = credential(history=[(NOW - 400_000, 8), (NOW - 1000, 9)])
+        evidence.commit_counter(cred, 11, NOW)
+        self.assertEqual(cred.counter, 8)
+        self.assertEqual(cred.history, [(NOW - 1000, 9), (NOW, 11)])
+
+    def context_for(self, vid):
+        from aab import vectorexec
+        v = context.load_vector(vid)
+        ctx = vectorexec.build_approval_context(v["context"])
+        ctx.backend = ACCEPT_ALL()
+        return v, ctx
+
+    def test_counter_failure_keeps_pending(self):
+        v, ctx = self.context_for("WA-001")
+        cred = ctx.credentials[bytes.fromhex(v["context"]["credentials"][0]["id_hex"])]
+        cred.counter = 100
+        pending = dict(ctx.state.pending)
+        with self.assertRaises(AabError) as cm:
+            evidence.verify_action(bytes.fromhex(v["input"]["evidence_hex"]), ctx)
+        self.assertEqual(cm.exception.code, "E_WA_COUNTER")
+        self.assertEqual(ctx.state.pending, pending)
+        self.assertEqual(cred.history, [])
+
+    def test_replay_does_not_commit_counter(self):
+        v, ctx = self.context_for("WA-001")
+        data = bytes.fromhex(v["input"]["evidence_hex"])
+        evidence.verify_action(data, ctx)
+        cred = ctx.credentials[bytes.fromhex(v["context"]["credentials"][0]["id_hex"])]
+        history = list(cred.history)
+        with self.assertRaises(AabError) as cm:
+            evidence.verify_action(data, ctx)
+        self.assertEqual(cm.exception.code, "E_REPLAY")
+        self.assertEqual(cred.history, history)
 
 
 class AuditorAfterSignature(unittest.TestCase):

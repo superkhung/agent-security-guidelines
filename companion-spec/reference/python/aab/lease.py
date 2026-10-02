@@ -22,6 +22,7 @@ from .errors import (
     E_SESSION,
     E_TAG_ORDER,
     E_VALUE,
+    E_WA_COUNTER,
 )
 from .identity import ServerIdentity
 from .identity import decode as decode_identity
@@ -334,11 +335,14 @@ def verify_grant(data: bytes, ctx: evidence.ApprovalContext, grants: GrantState)
         count = evidence.webauthn_tail(ctx, m, ref, cred)                 # 7.2 steps 5-8
     else:
         evidence.device_key_tail(ctx, m, cred)                            # 7.3 steps 2-8
+    # One atomic step (Section 8.4): lease id and counter, then record both.
     if rec["lease_id"] in grants.granted:
         raise AabError(E_REPLAY, "lease id granted concurrently")
+    if count is not None and not evidence.counter_ok(cred, count, rec["not_before"], ctx.state.now):
+        raise AabError(E_WA_COUNTER, "signCount %d not above the snapshot or already used" % count)
     grants.granted.add(rec["lease_id"])
     if count is not None:
-        cred.counter = count
+        evidence.commit_counter(cred, count, ctx.state.now)
     return {"record": rec, "digest": ref}
 
 

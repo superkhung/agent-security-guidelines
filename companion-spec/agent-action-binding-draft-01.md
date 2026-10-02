@@ -326,7 +326,7 @@ The fingerprint protects the definition the model actually sees.
 | `0x05` | tool name | REQUIRED | `utf8(name)` |
 | `0x06` | tool fingerprint | REQUIRED | Digest reference to the approved fingerprint (Section 5) |
 | `0x07` | arguments | REQUIRED | `jcs(arguments)`; an absent or `null` `arguments` member is encoded as `jcs({})`; a value that is not an object is rejected with `E_JSON` |
-| `0x08` | not before | REQUIRED | `i64` |
+| `0x08` | not before | REQUIRED | `i64`: the time the proxy creates the pending entry (Section 6.2). The proxy MUST set it so; the counter check of Section 7.2 step 8 uses it as its snapshot time |
 | `0x09` | not after | REQUIRED | `i64`; `not_after − not_before` MUST NOT exceed 300 000 ms (Section 6.4) `[OI-7]` |
 | `0x0A` | approver id | OPTIONAL | `utf8(approver_id)`: when present, only this approver's credential may sign |
 | `0x0B` | presentation digest | OPTIONAL | Digest reference to what the trusted display rendered; object type undefined `[OI-8]` |
@@ -337,7 +337,7 @@ The fingerprint protects the definition the model actually sees.
 2. For an action that needs approval, the proxy builds the action record, computes its digest reference, and stores a **pending entry** `(session id, sequence, action digest reference)` before issuing the challenge. It MUST NOT create two pending entries with the same `(session id, sequence)`.
 3. The challenge is `raw(action digest reference)`. For WebAuthn, the proxy passes these bytes as `challenge` in `PublicKeyCredentialRequestOptions`, so `clientDataJSON.challenge` is `b64u(raw(action digest reference))`. The proxy sends the action record bytes together with the challenge; they come back as evidence key `10` (Section 7.1).
 4. One challenge covers exactly one action. `[OI-14]`
-5. A pending entry is consumed atomically when verification succeeds, before forwarding (Section 6.4). A consumed entry is never reinstated, even if forwarding fails. An entry MAY be discarded once the current time is past `not_after` plus the skew allowance.
+5. A pending entry is consumed when verification succeeds, before forwarding, in the atomic step of Section 7.2, which also checks and records the signature counter. A consumed entry is never reinstated, even if forwarding fails. An entry MAY be discarded once the current time is past `not_after` plus the skew allowance.
 
 A verifier other than the proxy needs access to the proxy's pending entries. How it gets them is out of scope.
 
@@ -373,7 +373,7 @@ The verifier runs these checks on the decoded action record, in this order, as s
 
 The verifier MUST accept a clock skew of up to 30 000 ms and no more.
 
-After every step of Section 7.2 or 7.3 has succeeded, the verifier consumes the pending entry with an atomic compare-and-delete. If another verification consumed it first, this verification fails with `E_REPLAY`.
+After every step of Section 7.2 or 7.3 has succeeded, the verifier consumes the pending entry with an atomic compare-and-delete, in the same atomic step as the counter (Section 7.2). If another verification consumed it first, this verification fails with `E_REPLAY`.
 
 ---
 
@@ -426,9 +426,22 @@ The verifier MUST perform all of the following, in this order, and reject on the
    7. If the deployment forbids synced credentials, flag BE is not set. Else `E_WA_FLAGS`.
    8. If key `8` (userHandle) is present, it equals the user handle stored for the credential. Else `E_CREDENTIAL`.
 7. **Signature.** Verify key `7` over `authenticatorData ‖ SHA-256(clientDataJSON)` with the registered public key, using the algorithm and signature format of Section 7.5. Else `E_WA_SIGNATURE`.
-8. **Counter.** If either the stored counter or the received `signCount` is non-zero, the received value MUST be greater than the stored one. Else `E_WA_COUNTER`.
+8. **Counter.** For each credential the verifier keeps a base counter (the value at registration) and the history of `(accepted_at, signCount)` pairs it has accepted, for at least 360 000 ms (the longest validity window plus twice the skew allowance). Older pairs MAY be dropped after raising the base to their largest counter. With `received` the `signCount` of this assertion, `not_before` field `0x08` of the record, and `now` the time of Section 6.4:
 
-On success, the verifier stores the new counter value, consumes the pending entry (Section 6.4), and the proxy forwards the request built from the record (Section 6.3).
+   ```
+   t      = max(not_before, now − 360 000)
+   c_max  = max(base, every counter in the history)
+   c_snap = max(base, every counter in the history with accepted_at ≤ t)
+   later  = { counters in the history with accepted_at > t }
+   ```
+
+   The check passes if `c_max = 0` and `received = 0` (an authenticator that does not use counters), or if `received > c_snap` and `received` is not in `later`. Else `E_WA_COUNTER`. This step runs inside the atomic step below.
+
+   Rationale: approvals may complete in any order (Section 6.2), so an assertion signed before another one may be presented after it. Comparing with the counter as of the record's `not_before` accepts both, while a cloned authenticator that reuses a counter value, or signs with a value below one accepted before the challenge was issued, is still rejected.
+
+**Atomic step.** After steps 1–7 the verifier, as one atomic operation: checks that the pending entry for `(session id, sequence)` is still unconsumed and equals key `3` (else `E_REPLAY`); runs step 8 against the current counter state (else `E_WA_COUNTER`); then consumes the pending entry and records `(now, received)` in the credential's history. If either check fails, neither the pending entry nor the counter state changes.
+
+On success, the proxy forwards the request built from the record (Section 6.3).
 
 Step 2 binds the record to the signed digest; steps 5 and 7 bind the digest to the signature; the forwarding rule binds the forwarded request to the record. A proxy that forwards the agent's original request, rather than the request built from the record, does not conform.
 
@@ -566,7 +579,7 @@ The grant evidence is the container of Section 7.1, with key `11` `"lease"`, key
 
 4. Steps 4–8 of Section 7.2 (or the remaining steps of Section 7.3). In step 4, the credential MUST belong to the grantor in field `0x04`. Else `E_CREDENTIAL`.
 
-On success, the verifier records the lease id permanently, atomically and before the lease becomes active, and logs a lease grant record (Section 9.1).
+The final checks run as one atomic operation, as in Section 7.2: the lease id has not been granted (else `E_REPLAY`) and, for `webauthn`, step 8 of Section 7.2 with the lease record's `not_before` (else `E_WA_COUNTER`). Then the verifier records the lease id permanently, before the lease becomes active, and the counter, and logs a lease grant record (Section 9.1). If either check fails, nothing is recorded.
 
 ---
 
@@ -770,11 +783,13 @@ Passkeys synced across devices (BE flag set) are only as strong as the sync acco
 
 ### 13.4. Clock skew
 
-Validity windows depend on the verifier's clock. The skew allowance (Section 6.4) is deliberately small: a verifier MUST accept up to 30 000 ms and no more. Verifiers SHOULD synchronize time from an authenticated source.
+Validity windows depend on the verifier's clock. The skew allowance (Section 6.4) is deliberately small: a verifier MUST accept up to 30 000 ms and no more. Verifiers SHOULD synchronize time from an authenticated source. The counter check (Section 7.2 step 8) compares the proxy's `not_before` with the verifier's acceptance times, so a verifier separate from the proxy MUST use the same time source as the proxy.
 
 ### 13.5. Signature counters
 
 Many authenticators always report zero. The counter check detects cloned authenticators only when counters are used, and is not a replay defence. Replay is prevented by pending entries (Section 6.2), which are consumed once.
+
+The check of Section 7.2 step 8 is weaker than "strictly increasing" in one respect: an assertion with a counter below one accepted after the record's `not_before` is accepted, as long as that exact value was not used. This is what lets concurrent approvals complete in any order. Some authenticators keep one counter for all relying parties, so their counters for this verifier have gaps; the check does not require consecutive values.
 
 ### 13.6. Log writer compromise
 
@@ -852,6 +867,7 @@ The findings are listed in `reference/SPEC-FINDINGS.md`; issues are in the repos
 
 | Finding | Change | Where |
 | :--- | :--- | :--- |
+| F-1 | Signature counter compared with the snapshot at the record's `not_before`, within one atomic step with the pending entry; `not_before` is the pending entry's creation time | 6.1, 6.2, 6.4, 7.2, 8.4, 13.4, 13.5 |
 | F-6 | Evidence container key `11` names the object type of key `10`; an endpoint rejects the other type | 7.1, 7.2, 8.4 |
 | F-7 | JSON fields inside records MUST already be canonical; new error `E_NOT_CANONICAL` | 4.3, 10 |
 | F-46 | Container `version` is the text label of the domain prefix (`"01"`), so draft and frozen versions cannot collide; domain prefix `aab/01/` | 4.5, 7.1, 9.2, 11 |
@@ -946,7 +962,7 @@ Vectors marked P test proxy behaviour and are required only for the Proxy class 
 | ACT-015 | Absent `arguments`, `"arguments": null`, and `{}` | same digest |
 | ACT-016 | Approver id set; signed by another approver's valid credential | reject `E_CREDENTIAL` |
 | ACT-017 | Tool server as verifier receives `params.arguments` differing by one byte from field `0x07` of key `10` | reject `E_DIGEST_MISMATCH` |
-| ACT-018 P | Two approvals pending at once; the later sequence is approved and executed first | both accept |
+| ACT-018 P | Two approvals pending at once, signed in sequence order (signCount 11, then 12); the later sequence is presented and executed first | both accept |
 | ACT-019 P | Agent request with `params._meta` and an extra `params` member | accept; forwarded request contains only the members of Section 6.3 |
 | ACT-020 | Duplicate `name` member in `params` of the agent's request | reject `E_DUP_KEY` |
 
@@ -972,6 +988,8 @@ Vectors in this group include a test authenticator key pair so that runners can 
 | WA-014 | Stored counter 10, received 10 | reject `E_WA_COUNTER` |
 | WA-015 | Stored counter 0, received 0 | accept |
 | WA-016 | Unknown credential id | reject `E_CREDENTIAL` |
+| WA-030 | Counter equal to a value accepted after the record's `not_before` | reject `E_WA_COUNTER` |
+| WA-031 | Counter not above the largest value accepted before the record's `not_before` | reject `E_WA_COUNTER` |
 | WA-017 | Container with map keys out of canonical order | reject `E_CBOR` |
 | WA-018 | Container with indefinite-length byte string | reject `E_CBOR` |
 | WA-019 | Container with unknown key `11` | reject `E_CBOR` |
