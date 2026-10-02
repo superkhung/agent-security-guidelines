@@ -5,10 +5,11 @@ from __future__ import annotations
 
 from typing import Dict, Iterable, List, NamedTuple, Optional
 
-from . import evidence, sigs
+from . import cbor, evidence, sigs
 from .encoding import i64, lp, u8, u64
 from .errors import (
     AabError,
+    E_ALG_MISMATCH,
     E_LOG_CHAIN,
     E_LOG_CHECKPOINT,
     E_LOG_ID,
@@ -34,6 +35,7 @@ from .records import (
     ref_of,
     domain_prefix,
     HASHES,
+    WIRE_VERSION,
 )
 
 RECORD_TYPES = {0: "session open", 1: "action request", 2: "action decision", 3: "action result",
@@ -59,9 +61,7 @@ SCHEMA = {
 CHECKPOINT_SCHEMA = {
     0x01: Field("log_id", True, f_id16),
     0x02: Field("size", True, f_u64),
-    # SPEC-AMBIGUITY: 9.3: the head is a digest reference whose object type
-    # is "log-link" or "log-genesis" (for size 0); the expected algorithm is
-    # the one configured for "log-link".
+    # The head uses the log's hash algorithm (Section 9.6).
     0x03: Field("head", True, f_ref("log-link")),
     0x04: Field("time", True, f_i64),
 }
@@ -176,35 +176,80 @@ def checkpoint_ref(data: bytes, alg: str = "sha-256") -> DigestRef:
     return ref_of("checkpoint", data, alg)
 
 
-class AnchoredCheckpoint(NamedTuple):
-    """A checkpoint the auditor holds from an independent party (Section 9.4)."""
+class LogKey(NamedTuple):
+    """One log key in the auditor's configuration (Section 9.6)."""
 
-    # SPEC-AMBIGUITY: 9.3/9.4: there is no wire format for a signed checkpoint
-    # (record + COSE_Sign1 + optional RFC 3161 token), no COSE header profile
-    # (alg set, kid), no signature algorithm list for the log key, and no rule
-    # for how the auditor obtains the log key. We use this tuple; the
-    # COSE_Sign1 payload must be the checkpoint digest reference, `alg` must be
-    # in the protected header, and the algorithms of Section 7.5 except RS256
-    # apply (as for device-key).
-    record: bytes
+    cose_key: dict
+    not_before: int
+    not_after: int
+
+
+class LogTrust(NamedTuple):
+    """The auditor's configuration for one log id (Section 9.6)."""
+
+    alg: str                    # the log's hash algorithm, fixed at genesis
+    keys: Dict[bytes, LogKey]   # kid -> key
+
+
+class Bundle(NamedTuple):
+    """A signed checkpoint bundle (Section 9.3)."""
+
+    checkpoint: bytes
     cose_sign1: bytes
-    timestamp_token: Optional[bytes] = None
+    timestamp: Optional[bytes] = None
 
 
-def verify_checkpoint_signature(cp: AnchoredCheckpoint, log_key: dict, backend: sigs.SignatureBackend,
-                                cfg: Config) -> None:
-    prot_b, prot, unprot, payload, sig = evidence.decode_cose_sign1(cp.cose_sign1, E_LOG_CHECKPOINT)
-    alg = prot.get(1)
-    if (alg not in sigs.EQUIVALENT or 1 in unprot or log_key.get("alg") not in sigs.EQUIVALENT
-            or sigs.EQUIVALENT[alg] != sigs.EQUIVALENT[log_key["alg"]]):
-        raise AabError(E_LOG_CHECKPOINT, "checkpoint alg missing or not the log key's")
-    if payload != checkpoint_ref(cp.record, cfg.alg("checkpoint")).encode():
-        raise AabError(E_LOG_CHECKPOINT, "COSE payload is not the checkpoint digest reference")
+_BUNDLE_KEYS = {1: str, 2: bytes, 3: bytes, 4: bytes}
+
+
+def encode_bundle(checkpoint: bytes, cose_sign1: bytes, timestamp: Optional[bytes] = None) -> bytes:
+    m = {1: WIRE_VERSION, 2: checkpoint, 3: cose_sign1}
+    if timestamp is not None:
+        m[4] = timestamp
+    return cbor.encode(m)
+
+
+def decode_bundle(data: bytes) -> Bundle:
+    """Section 9.3: deterministic CBOR map; every failure is E_LOG_CHECKPOINT."""
     try:
-        sigs.verify(log_key, evidence.sig_structure(prot_b, payload), sig, "checkpoint", backend)
+        m = cbor.decode(data, deterministic=True)
+    except cbor.CborError as exc:
+        raise AabError(E_LOG_CHECKPOINT, "bundle: %s" % exc)
+    if not isinstance(m, dict):
+        raise AabError(E_LOG_CHECKPOINT, "bundle is not a map")
+    for k, v in m.items():
+        if k not in _BUNDLE_KEYS or not isinstance(v, _BUNDLE_KEYS[k]):
+            raise AabError(E_LOG_CHECKPOINT, "bundle key %r unknown or of the wrong type" % (k,))
+    if not {1, 2, 3} <= set(m):
+        raise AabError(E_LOG_CHECKPOINT, "bundle misses keys %s" % sorted({1, 2, 3} - set(m)))
+    if m[1] != WIRE_VERSION:
+        raise AabError(E_LOG_CHECKPOINT, "bundle version is not %r" % WIRE_VERSION)
+    return Bundle(m[2], m[3], m.get(4))
+
+
+def verify_checkpoint_signature(bundle: Bundle, cp: dict, trust: LogTrust, backend: sigs.SignatureBackend) -> None:
+    """Section 9.5 step 3, the COSE and signature part. Every failure is E_LOG_CHECKPOINT."""
+    prot_b, prot, unprot, payload, sig = evidence.decode_cose_sign1(bundle.cose_sign1, E_LOG_CHECKPOINT)
+    if unprot:
+        raise AabError(E_LOG_CHECKPOINT, "unprotected header is not empty")
+    if 1 not in prot or 4 not in prot or not isinstance(prot[4], bytes):
+        raise AabError(E_LOG_CHECKPOINT, "alg and kid must be in the protected header")
+    entry = trust.keys.get(prot[4])
+    if entry is None:
+        raise AabError(E_LOG_CHECKPOINT, "kid is not a key of this log")
+    alg, reg = prot[1], entry.cose_key.get("alg")
+    if (alg not in sigs.EQUIVALENT or reg not in sigs.EQUIVALENT or sigs.EQUIVALENT[alg] != sigs.EQUIVALENT[reg]
+            or sigs.EQUIVALENT[reg] == sigs.RS256):
+        raise AabError(E_LOG_CHECKPOINT, "checkpoint alg %r not allowed or not the key's" % (alg,))
+    if payload != checkpoint_ref(bundle.checkpoint, trust.alg).encode():
+        raise AabError(E_LOG_CHECKPOINT, "COSE payload is not the checkpoint digest reference")
+    if not entry.not_before <= cp["time"] <= entry.not_after:
+        raise AabError(E_LOG_CHECKPOINT, "checkpoint time outside the key's validity")
+    try:
+        sigs.verify(entry.cose_key, evidence.sig_structure(prot_b, payload), sig, "checkpoint", backend)
     except sigs.SignatureFailure as exc:
         raise AabError(E_LOG_CHECKPOINT, str(exc))
-    if cp.timestamp_token is not None:
+    if bundle.timestamp is not None:
         # SPEC-AMBIGUITY: 9.4 rule 2 / 9.5 step 3.1 (F-41): no RFC 3161
         # validation profile (trusted TSAs, required checks, genTime vs the
         # checkpoint time), so no conforming check can be written.
@@ -214,18 +259,18 @@ def verify_checkpoint_signature(cp: AnchoredCheckpoint, log_key: dict, backend: 
 # --- auditor (Section 9.5) -------------------------------------------------
 
 
-def audit(records: List[bytes], anchored: List[AnchoredCheckpoint], log_id: bytes, log_key: dict,
+def audit(records: List[bytes], bundles: List[bytes], log_id: bytes, trust: LogTrust,
           backend: Optional[sigs.SignatureBackend] = None, cfg: Config = DEFAULT_CONFIG,
           payload_store: Optional[Dict[bytes, bytes]] = None) -> dict:
     """Section 9.5. Stops at the first error (Section 10).
 
     Returns ``{"error": code|None, "verified_up_to": k|None,
     "unanchored": [indices], "payload_missing": [indices]}``.
-    ``anchored`` is in the order the checkpoints were anchored.
+    ``bundles`` are the anchored checkpoint bundles, in the order they were
+    anchored. ``trust`` gives the log's hash algorithm and keys; ``cfg``
+    governs only the digest references inside the records.
     """
-    # SPEC-AMBIGUITY: 9.5: the reference log id when there is no anchored
-    # checkpoint is not defined ("the log id of the anchored checkpoints").
-    # The caller supplies the expected log id.
+    # The log id and the trust configuration come from the auditor (Section 9.6).
     # SPEC-AMBIGUITY: 9.5/10: the auditor must report "any errors", while
     # Section 10 says to report the first. We stop at the first error and then
     # report no verified range.
@@ -235,7 +280,8 @@ def audit(records: List[bytes], anchored: List[AnchoredCheckpoint], log_id: byte
     # "extends" condition can never fail here, and a later but smaller
     # checkpoint that is consistent with the records is still E_LOG_ROLLBACK.
     backend = backend or sigs.NullBackend()
-    alg = cfg.alg("log-link")
+    alg = trust.alg
+    cp_cfg = Config({"log-link": alg, "checkpoint": alg}, default=alg)
     decoded = []
     for pos, r in enumerate(records):          # step 1, record by record
         # SPEC-AMBIGUITY: 9.5 step 1: "every record decodes ... and then its
@@ -252,17 +298,20 @@ def audit(records: List[bytes], anchored: List[AnchoredCheckpoint], log_id: byte
         decoded.append(rec)
     hs = heads(log_id, records, alg)           # step 2
     cps = []
-    for cp in anchored:                        # step 3
+    for data in bundles:                       # step 3
         try:
-            c = decode_checkpoint(cp.record, cfg)
-        except AabError:
-            # SPEC-AMBIGUITY: 9.5: a checkpoint that does not decode has no
-            # stated code; we use E_LOG_CHECKPOINT.
-            return _fail(E_LOG_CHECKPOINT)
-        if c["log_id"] != log_id:
-            # SPEC-AMBIGUITY: 9.5: an anchored checkpoint of another log id.
-            return _fail(E_LOG_ID)
-        verify_checkpoint_signature(cp, log_key, backend, cfg)
+            b = decode_bundle(data)
+            try:
+                c = decode_checkpoint(b.checkpoint, cp_cfg)
+            except AabError as exc:
+                if exc.code == E_ALG_MISMATCH:
+                    raise
+                raise AabError(E_LOG_CHECKPOINT, "checkpoint record: %s" % exc)
+            if c["log_id"] != log_id:
+                raise AabError(E_LOG_ID, "checkpoint of another log")
+            verify_checkpoint_signature(b, c, trust, backend)
+        except AabError as exc:
+            return _fail(exc.code)
         if c["size"] > len(records) or c["head"].digest != hs[c["size"]]:
             return _fail(E_LOG_CHAIN)
         cps.append(c)

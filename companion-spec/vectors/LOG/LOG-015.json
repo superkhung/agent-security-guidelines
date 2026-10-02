@@ -16,12 +16,22 @@
       "0001000000101f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f0002000000080000000000000005000300000008000001a0c4507ba0000400000010000102030405060708090a0b0c0d0e0f00050000000800000000000000020006000000010100080000002f000000077368612d323536000000200dd5fd39e91874806cf8fb0edca566b69f41da3c71eba45eaeb1a01e829e6d5f"
     ],
     "anchored": [],
-    "log_key": {
-      "kty": 2,
-      "crv": 1,
-      "alg": -7,
-      "x_hex": "392cac5e9c8ad767c2f779e5c82f812605cdc0f41ac46e6317103a41869e681d",
-      "y_hex": "6e7365f49ee6f549b7cfdbded80d80600256af0a5cdddb274914887f5fcd19b1"
+    "log_trust": {
+      "alg": "sha-256",
+      "keys": [
+        {
+          "kid_hex": "10c010c010c010c010c010c010c010c0",
+          "cose_key": {
+            "kty": 2,
+            "crv": 1,
+            "alg": -7,
+            "x_hex": "392cac5e9c8ad767c2f779e5c82f812605cdc0f41ac46e6317103a41869e681d",
+            "y_hex": "6e7365f49ee6f549b7cfdbded80d80600256af0a5cdddb274914887f5fcd19b1"
+          },
+          "not_before": 1789913600000,
+          "not_after": 1790086400000
+        }
+      ]
     }
   },
   "test_keys": {

@@ -13,7 +13,7 @@ import hashlib
 import unittest
 
 import context
-from aab import evidence
+from aab import cbor, evidence, log, records
 from aab.errors import AabError
 from aab.vectorexec import execute
 
@@ -138,6 +138,79 @@ class Counter(unittest.TestCase):
             evidence.verify_action(data, ctx)
         self.assertEqual(cm.exception.code, "E_REPLAY")
         self.assertEqual(cred.history, history)
+
+
+class CheckpointBundle(unittest.TestCase):
+    """F-5: signed checkpoint bundle, COSE profile and auditor trust (Section 9.3, 9.6)."""
+
+    LOG_ID = bytes.fromhex("1f" * 16)
+    KID = bytes.fromhex("10c0" * 8)
+    EC_KEY = {"kty": 2, "crv": 1, "alg": -7, "x": b"\x01" * 32, "y": b"\x02" * 32}
+    LOW_SIG = b"\x01" * 64
+
+    def trust(self, key=None, nb=0, na=10 ** 13):
+        return log.LogTrust("sha-256", {self.KID: log.LogKey(key or self.EC_KEY, nb, na)})
+
+    def records(self, n=3):
+        return [log.build(self.LOG_ID, i, 1000 + i, bytes(16), 0, 0) for i in range(n)]
+
+    def bundle(self, size=3, prot=None, unprot=None, head_alg="sha-256", sig=None, extra=None):
+        hs = log.heads(self.LOG_ID, self.records()[:size], head_alg)
+        cp = log.build_checkpoint(self.LOG_ID, size, records.DigestRef(head_alg, hs[size]), 2000)
+        payload = log.checkpoint_ref(cp, "sha-256").encode()
+        prot = {1: -7, 4: self.KID} if prot is None else prot
+        cose = cbor.encode(cbor.Tag(18, [cbor.encode(prot), unprot or {}, payload, sig or self.LOW_SIG]))
+        if extra is None:
+            return log.encode_bundle(cp, cose)
+        m = {1: "01", 2: cp, 3: cose}
+        m.update(extra)
+        return cbor.encode(m)
+
+    def error(self, bundle, trust=None):
+        return log.audit(self.records(), [bundle], self.LOG_ID, trust or self.trust(), backend=ACCEPT_ALL())["error"]
+
+    def test_bundle_roundtrip(self):
+        b = self.bundle()
+        d = log.decode_bundle(b)
+        self.assertIsNone(d.timestamp)
+        self.assertEqual(log.encode_bundle(d.checkpoint, d.cose_sign1), b)
+        out = log.audit(self.records(), [b], self.LOG_ID, self.trust(), backend=ACCEPT_ALL())
+        self.assertEqual((out["error"], out["verified_up_to"]), (None, 2))
+
+    def test_bundle_unknown_key(self):
+        self.assertEqual(self.error(self.bundle(extra={5: b""})), "E_LOG_CHECKPOINT")
+
+    def test_bundle_version(self):
+        self.assertEqual(self.error(self.bundle(extra={1: "00"})), "E_LOG_CHECKPOINT")
+
+    def test_unprotected_header_must_be_empty(self):
+        self.assertEqual(self.error(self.bundle(unprot={4: self.KID})), "E_LOG_CHECKPOINT")
+
+    def test_kid_not_configured(self):
+        self.assertEqual(self.error(self.bundle(prot={1: -7, 4: b"\xff" * 16})), "E_LOG_CHECKPOINT")
+
+    def test_key_validity(self):
+        self.assertEqual(self.error(self.bundle(), self.trust(na=1999)), "E_LOG_CHECKPOINT")
+        self.assertIsNone(self.error(self.bundle(), self.trust(nb=2000, na=2000)))
+
+    def test_head_alg_mismatch(self):
+        self.assertEqual(self.error(self.bundle(head_alg="sha-384")), "E_ALG_MISMATCH")
+
+    def test_rs256_log_key(self):
+        rsa = {"kty": 3, "alg": -257, "n": b"\xc0" * 256, "e": b"\x01\x00\x01"}
+        self.assertEqual(self.error(self.bundle(prot={1: -257, 4: self.KID}, sig=b"\x01" * 256), self.trust(rsa)),
+                         "E_LOG_CHECKPOINT")
+
+    def test_high_s_checkpoint(self):
+        from aab import sigs
+        high = b"\x01" * 32 + (sigs.P256_N - 1).to_bytes(32, "big")
+        self.assertEqual(self.error(self.bundle(sig=high)), "E_LOG_CHECKPOINT")
+
+    def test_low_s(self):
+        from aab import sigs
+        self.assertTrue(sigs.low_s(b"\x01" * 32 + (1).to_bytes(32, "big")))
+        self.assertTrue(sigs.low_s(b"\x01" * 32 + (sigs.P256_N // 2).to_bytes(32, "big")))
+        self.assertFalse(sigs.low_s(b"\x01" * 32 + (sigs.P256_N // 2 + 1).to_bytes(32, "big")))
 
 
 class AuditorAfterSignature(unittest.TestCase):

@@ -11,12 +11,22 @@
       "id": "registry.example.internal/mcp/files@sha256:abababababababababababababababababababababababababababababababab"
     },
     "log_id_hex": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
-    "log_key": {
-      "kty": 2,
-      "crv": 1,
-      "alg": -7,
-      "x_hex": "392cac5e9c8ad767c2f779e5c82f812605cdc0f41ac46e6317103a41869e681d",
-      "y_hex": "6e7365f49ee6f549b7cfdbded80d80600256af0a5cdddb274914887f5fcd19b1"
+    "log_trust": {
+      "alg": "sha-256",
+      "keys": [
+        {
+          "kid_hex": "10c010c010c010c010c010c010c010c0",
+          "cose_key": {
+            "kty": 2,
+            "crv": 1,
+            "alg": -7,
+            "x_hex": "392cac5e9c8ad767c2f779e5c82f812605cdc0f41ac46e6317103a41869e681d",
+            "y_hex": "6e7365f49ee6f549b7cfdbded80d80600256af0a5cdddb274914887f5fcd19b1"
+          },
+          "not_before": 1789913600000,
+          "not_after": 1790086400000
+        }
+      ]
     },
     "steps": [
       {
@@ -73,7 +83,7 @@
       {
         "op": "checkpoint",
         "now": 1790000013000,
-        "cose_sign1_hex": "d28443a10126a0582f000000077368612d32353600000020159f3862e1d265f1422a7cabc97dcc01671eb17c0ee1c3c02f60b7315b95d3825840421334fbe5749fa315295cb315ab05bb1ea4c22575c0a23062d1c59a0adaf62fea17ea878384ce310923262e0c7cc30900196a306d77fa449670faf0a84dbc58"
+        "cose_sign1_hex": "d28455a20126045010c010c010c010c010c010c010c010c0a0582f000000077368612d32353600000020159f3862e1d265f1422a7cabc97dcc01671eb17c0ee1c3c02f60b7315b95d38258405870b697d6c2b06ba4df7f2613e7a5d982271ba182abc7bbc356fcec015ab4180750d624af0a7fb919df865d61a95ef7f27f55bee66444856b08e2cf063e82d7"
       },
       {
         "op": "audit"

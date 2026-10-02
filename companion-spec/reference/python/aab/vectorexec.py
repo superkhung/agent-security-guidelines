@@ -252,14 +252,18 @@ def h_lease_call(v, inp, ctx):
     return out
 
 
+def _trust(d: dict) -> log.LogTrust:
+    return log.LogTrust(d["alg"], {bytes.fromhex(k["kid_hex"]): log.LogKey(_cose_key(k["cose_key"]), k["not_before"],
+                                                                          k["not_after"]) for k in d["keys"]})
+
+
 def h_log_audit(v, inp, ctx):
-    anchored = [log.AnchoredCheckpoint(bytes.fromhex(a["record_hex"]), bytes.fromhex(a["cose_sign1_hex"]),
-                                       _hex(a.get("timestamp_token_hex"))) for a in inp.get("anchored", [])]
+    anchored = [bytes.fromhex(b) for b in inp.get("anchored", [])]
     store = None
     if "payload_store" in inp:
         store = {records.parse_ref_text(p).digest: b"" for p in inp["payload_store"]}
     res = log.audit([bytes.fromhex(r) for r in inp["records_hex"]], anchored, bytes.fromhex(inp["log_id_hex"]),
-                    _cose_key(inp.get("log_key", {})), backend=_BACKEND[0], cfg=_cfg(ctx),
+                    _trust(inp["log_trust"]), backend=_BACKEND[0], cfg=_cfg(ctx),
                     payload_store=store)
     if res["error"]:
         return {"result": "reject", "error": res["error"]}
@@ -304,10 +308,10 @@ def h_e2e(v, inp, ctx):
                 return {"result": "ok"}
             if op == "checkpoint":
                 rec = px.checkpoint(st["now"])
-                anchored.append(log.AnchoredCheckpoint(rec, bytes.fromhex(st["cose_sign1_hex"])))
+                anchored.append(log.encode_bundle(rec, bytes.fromhex(st["cose_sign1_hex"])))
                 return {"result": "ok", "record_hex": rec.hex()}
             if op == "audit":
-                res = log.audit(px.writer.records, anchored, px.writer.log_id, _cose_key(inp["log_key"]),
+                res = log.audit(px.writer.records, anchored, px.writer.log_id, _trust(inp["log_trust"]),
                                 backend=_BACKEND[0], cfg=_cfg(ctx))
                 if res["error"]:
                     return {"result": "reject", "error": res["error"]}

@@ -480,7 +480,7 @@ The algorithm is taken from the registered COSE_Key (`alg` parameter), never fro
 | `−19` Ed25519 (RFC 9864) | OKP, Ed25519 | As `−8` | As `−8` | MUST, equivalent to `−8` |
 | `−257` RS256 | RSA, at least 2048 bits | RSASSA-PKCS1-v1_5 | Not allowed | MAY |
 
-A `−8` key whose curve is not Ed25519 MUST be rejected (`E_WA_SIGNATURE` or `E_COSE`). A verifier that does not accept RS256 rejects an RS256 credential with `E_WA_SIGNATURE`. `[OI-18]` Post-quantum algorithms are out of scope. `[OI-15]`
+Log keys that sign checkpoints use this table without RS256, and ES256 checkpoint signatures must have low S (Section 9.3). A `−8` key whose curve is not Ed25519 MUST be rejected (`E_WA_SIGNATURE` or `E_COSE`). A verifier that does not accept RS256 rejects an RS256 credential with `E_WA_SIGNATURE`. `[OI-18]` Post-quantum algorithms are out of scope. `[OI-15]`
 
 ---
 
@@ -653,7 +653,22 @@ A checkpoint commits to the log state after `size` records:
 | `0x03` | head | REQUIRED | Digest reference to `head_size` |
 | `0x04` | time | REQUIRED | `i64` |
 
-The log writer signs the checkpoint digest with a key held in a KMS or HSM, as a COSE_Sign1 with the checkpoint digest reference as payload. The log key MUST NOT be accessible to the agent or to the user running the agent (guideline OBS-02, "Sai lầm hay gặp"). `[OI-12]`
+The log writer signs the checkpoint with a key held in a KMS or HSM. The log key MUST NOT be accessible to the agent or to the user running the agent (guideline OBS-02, "Sai lầm hay gặp").
+
+**Signed checkpoint bundle.** A signed checkpoint is distributed as a CBOR map with the deterministic encoding of Section 7.1:
+
+| Key | Name | Type | Presence |
+| :--- | :--- | :--- | :--- |
+| `1` | version | tstr, `"01"` (Section 11) | REQUIRED |
+| `2` | checkpoint | bstr: the checkpoint record above, as tagged-record bytes | REQUIRED |
+| `3` | signature | bstr: a tagged COSE_Sign1 (RFC 9052) by the log key | REQUIRED |
+| `4` | timestamp | bstr: an RFC 3161 time-stamp token (Section 9.4 rule 2) | OPTIONAL |
+
+A bundle that is not deterministically encoded, has an unknown key, misses a required key, or carries another version MUST be rejected with `E_LOG_CHECKPOINT`.
+
+**COSE_Sign1 profile.** The protected header contains `alg` (label 1) and `kid` (label 4, a bstr naming the log key). The unprotected header MUST be empty. The payload is the checkpoint digest reference (Section 4.5, object type `checkpoint`, with the log's hash algorithm), attached, not detached. `external_aad` is empty.
+
+**Log key algorithms.** ES256 or ESP256 (`−7`, `−9`) with the signature as raw `r ‖ s`, and Ed25519 (`−8`, `−19`), as in Section 7.5. RS256 is not allowed. An ES256 signature MUST have `s ≤ n/2` (low S), because the software that signs checkpoints is under the deployment's control; a signature with high S MUST be rejected even though it verifies mathematically. This gives each checkpoint exactly one valid signature byte string. `[OI-12]`
 
 A checkpoint SHOULD be produced at least every `N` records or every `T` seconds, whichever comes first. `N` and `T` are deployment choices. `[OI-11]`
 
@@ -662,7 +677,7 @@ A checkpoint SHOULD be produced at least every `N` records or every `T` seconds,
 A signed checkpoint alone does not stop the log writer from producing a second, shorter history. A time-stamp does not stop it either: it shows *when* a checkpoint existed, not that it is the only one. A log writer can time-stamp a forked checkpoint and withhold the original.
 
 1. Each signed checkpoint MUST, when it is created, be delivered to at least one party independent of the log writer, which keeps it: a witness, the log auditor's own store, or a transparency log (for example one built with Trillian Tessera) operated by a different party. A checkpoint so delivered is **anchored**.
-2. An RFC 3161 time-stamp token over the checkpoint MAY be added, from a TSA the log writer does not operate. Its `messageImprint.hashAlgorithm` is the hash function `alg` of the checkpoint digest, and `messageImprint.hashedMessage` is `raw(checkpoint digest reference)`.
+2. An RFC 3161 time-stamp token over the checkpoint MAY be added, from a TSA the log writer does not operate, as key `4` of the bundle. Its `messageImprint.hashAlgorithm` is the hash function `alg` of the checkpoint digest, and `messageImprint.hashedMessage` is `raw(checkpoint digest reference)`. `aab-01` does not yet define how the token is validated (finding F-41).
 
 ### 9.5. Verification by the log auditor
 
@@ -670,16 +685,34 @@ The auditor takes a sequence of records, supplied by the log writer, and the anc
 
 The auditor MUST:
 
-1. Check that every record decodes (errors of Section 4) and carries the log id of the anchored checkpoints (else `E_LOG_ID`), and then that its index equals its position (else `E_LOG_INDEX`).
+1. Check that every record decodes (errors of Section 4) and carries the log id of the log being audited, from the auditor's configuration (Section 9.6) (else `E_LOG_ID`), and then that its index equals its position (else `E_LOG_INDEX`).
 2. Recompute the chain.
 3. For every anchored checkpoint, check:
-   1. its signature, and its time-stamp token if present. Else `E_LOG_CHECKPOINT`.
-   2. that `size` does not exceed the number of records, and that the recomputed `head_size` equals the checkpoint head. Else `E_LOG_CHAIN`. This check against the latest checkpoint the auditor holds is what detects truncation.
+   1. the bundle decodes (Section 9.3). Else `E_LOG_CHECKPOINT`.
+   2. the checkpoint record decodes, and its head uses the log's hash algorithm (Section 9.6). Else `E_ALG_MISMATCH` for the algorithm, `E_LOG_CHECKPOINT` for any other decoding error.
+   3. its log id is the log's. Else `E_LOG_ID`.
+   4. the COSE_Sign1 follows the profile of Section 9.3: unprotected header empty; `alg` and `kid` in the protected header; `kid` names a key configured for this log; `alg` is allowed and equals, or is equivalent to, that key's algorithm; the payload is the checkpoint digest reference; the checkpoint `time` lies within the key's validity period. Else `E_LOG_CHECKPOINT`.
+   5. for ES256, low S. Else `E_LOG_CHECKPOINT`.
+   6. the signature verifies over the `Sig_structure` of RFC 9052 §4.4. Else `E_LOG_CHECKPOINT`.
+   7. the time-stamp token, if present. Else `E_LOG_CHECKPOINT`.
+   8. that `size` does not exceed the number of records, and that the recomputed `head_size` equals the checkpoint head. Else `E_LOG_CHAIN`. This check against the latest checkpoint the auditor holds is what detects truncation.
 4. Check that checkpoint sizes are non-decreasing in the order the checkpoints were anchored, and that a later checkpoint's history extends an earlier one's. Else `E_LOG_ROLLBACK`.
 5. Check, within each session, that each sequence appears in at most one type-1 record, and that every type-2 or type-3 record has a lower-indexed type-1 record with the same session id and sequence. Else `E_LOG_SESSION`. Records of different actions MAY interleave in any order.
 6. Report the records after the latest anchored checkpoint as **unanchored**. The auditor MUST NOT report them as verified.
 
 Result: the auditor reports `verified up to index k`, plus the list of unanchored records, plus any errors. A plain "valid/invalid" result is not sufficient.
+
+### 9.6. Auditor configuration
+
+The auditor is configured, out of band and not by the log writer, with one entry per log it audits:
+
+| Item | Content |
+| :--- | :--- |
+| log id | 16 bytes |
+| hash algorithm | One `alg` of Section 4.5. The log uses it for `head₀`, every chain link, every checkpoint head and the checkpoint digest, from genesis on |
+| log keys | One or more COSE_Key, each with its `kid` and a validity period `[not_before, not_after]` in the time format of Section 4.4. A key is used for a checkpoint whose `time` lies within its period; rotation adds a key with a later period |
+
+A log never changes its hash algorithm; a new algorithm needs a new log id.
 
 ---
 
@@ -698,7 +731,7 @@ Result: the auditor reports `verified up to index k`, plus the list of unanchore
 | `E_NUMBER` | JSON number whose value changes under RFC 8785 serialization, or that overflows binary64 | 4.3 |
 | `E_JSON` | Invalid JSON, or `arguments` not an object | 4.3, 6.1 |
 | `E_NOT_CANONICAL` | JSON field inside a record not in RFC 8785 canonical form | 4.3, 5.1, 6.1, 8.1 |
-| `E_ALG_MISMATCH` | Digest algorithm unknown, or not the expected one | 4.5, 7.2 |
+| `E_ALG_MISMATCH` | Digest algorithm unknown, or not the expected one | 4.5, 7.2, 9.5 |
 | `E_FP_CHANGED` | Tool fingerprint differs from approved | 5.4, 6.4, 8.2, 8.4 |
 | `E_REPLAY` | No unconsumed pending entry for the action, or lease id already granted | 6.2, 6.4, 8.4 |
 | `E_EXPIRED` | Validity window too long, or current time outside it | 6.4, 8.2, 8.4 |
@@ -874,6 +907,9 @@ The findings are listed in `reference/SPEC-FINDINGS.md`; issues are in the repos
 | F-2 | Grant verification order written out step by step; the credential check runs for both profiles | 7.3, 8.4 |
 | F-3 | Lease grantee checked at grant (an agent of the session) and on every call; a session may have several agents | 2.4, 8.2, 8.4 |
 | F-4 | A constraint's `tool` must name a tool in the lease, else `E_VALUE` at grant | 8.3 |
+| F-5 | Signed checkpoint bundle, COSE profile, log key algorithms with low S, one hash algorithm per log, auditor configuration | 9.3, 9.4, 9.5, 9.6 |
+| F-33 (part) | Codes for a bundle or checkpoint that does not decode and for a checkpoint of another log | 9.5 |
+| F-39 (part) | Low S required for checkpoint signatures | 9.3 |
 | F-6 | Evidence container key `11` names the object type of key `10`; an endpoint rejects the other type | 7.1, 7.2, 8.4 |
 | F-25 | Device-key: RS256 rejected at step 5; algorithm equivalences hold in both directions | 7.3 |
 | F-26 | A lease grant needs the grantor to be authorized for every tool in the lease | 8.4 |
@@ -1081,6 +1117,12 @@ Vectors in this group include a test authenticator key pair so that runners can 
 | LOG-016 | Concurrent actions: type-1 record for sequence 3 before the type-1 record for sequence 2 | verified |
 | LOG-017 | Anchored checkpoint with an RFC 3161 token that does not verify | `E_LOG_CHECKPOINT` |
 | LOG-018 | Log writer supplies a forked history whose own checkpoint is time-stamped; the auditor holds an anchored checkpoint of the original history | `E_LOG_CHAIN` |
+| LOG-019 | Checkpoint COSE_Sign1 with `alg` only in the unprotected header | `E_LOG_CHECKPOINT` |
+| LOG-020 | Checkpoint `kid` that is not a key of the log | `E_LOG_CHECKPOINT` |
+| LOG-021 | ES256 checkpoint signature with high S (mathematically valid) | `E_LOG_CHECKPOINT` |
+| LOG-022 | Checkpoint head computed with `sha-384` in a `sha-256` log | `E_ALG_MISMATCH` |
+| LOG-023 | Log key with RS256 | `E_LOG_CHECKPOINT` |
+| LOG-024 | Bundle with map keys out of deterministic order | `E_LOG_CHECKPOINT` |
 
 ### B.8. E2E · End to end
 

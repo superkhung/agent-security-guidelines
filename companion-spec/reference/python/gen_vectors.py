@@ -943,6 +943,9 @@ def gen_ls():
 LOG_ID = bytes.fromhex("1f" * 16)
 LOG_B = bytes.fromhex("2e" * 16)
 LOG_KEY = KEY_LOG
+LOG_KID = bytes.fromhex("10c0" * 8)
+LOG_TRUST = {"alg": "sha-256", "keys": [{"kid_hex": LOG_KID.hex(), "cose_key": LOG_KEY,
+                                         "not_before": NB - 86_400_000, "not_after": NB + 86_400_000}]}
 LOG_EXTRA = {"test_keys": {"log": TEST_KEYS["log"]}, "test_keys_note": KEYS_NOTE}
 
 
@@ -974,23 +977,36 @@ def renumber(recs_specs):
     return out
 
 
-def signed_checkpoint(cp: bytes, key="log", payload=None) -> dict:
-    """A checkpoint with a COSE_Sign1 by ``key`` (payload: the checkpoint digest reference)."""
+def sign_checkpoint(cp: bytes, key="log", prot=None, unprot=None, high_s=False) -> bytes:
+    """A COSE_Sign1 by ``key`` over the checkpoint digest reference (Section 9.3).
+
+    ES256 signatures are normalized to low-S; ``high_s`` replaces s by n - s
+    afterwards (a valid but non-conforming signature)."""
     ref = log.checkpoint_ref(cp).encode()
-    prot_b = cbor.encode({1: -7})
-    sig = sign_cose(key, prot_b, payload if payload is not None else ref)
-    cose = cbor.encode(cbor.Tag(18, [prot_b, {}, ref, sig]))
-    return {"record_hex": cp.hex(), "cose_sign1_hex": cose.hex()}
+    prot_b = cbor.encode({1: -7, 4: LOG_KID} if prot is None else prot)
+    sig = sign_cose(key, prot_b, ref)
+    r, s_ = sig[:32], int.from_bytes(sig[32:], "big")
+    if s_ > sigs.P256_N // 2:
+        s_ = sigs.P256_N - s_
+    if high_s:
+        s_ = sigs.P256_N - s_
+    return cbor.encode(cbor.Tag(18, [prot_b, unprot or {}, ref, r + s_.to_bytes(32, "big")]))
 
 
-def anchored(recs, size, log_id=LOG_ID, key="log", time=NB + 100_000):
-    hs = log.heads(log_id, recs[:size])
-    cp = log.build_checkpoint(log_id, size, records.DigestRef("sha-256", hs[size]), time)
-    return signed_checkpoint(cp, key)
+def signed_checkpoint(cp: bytes, key="log", timestamp=None, **kw) -> str:
+    """The hex of a signed checkpoint bundle."""
+    return log.encode_bundle(cp, sign_checkpoint(cp, key, **kw), timestamp).hex()
+
+
+def anchored(recs, size, log_id=LOG_ID, key="log", time=NB + 100_000, alg="sha-256", **kw):
+    hs = log.heads(log_id, recs[:size], alg)
+    cp = log.build_checkpoint(log_id, size, records.DigestRef(alg, hs[size]), time)
+    return signed_checkpoint(cp, key, **kw)
 
 
 def laudit(vid, desc, recs, cps, catalogue=None, pending=None, **kw):
-    inp = {"log_id_hex": LOG_ID.hex(), "records_hex": [r.hex() for r in recs], "anchored": cps, "log_key": LOG_KEY}
+    inp = {"log_id_hex": LOG_ID.hex(), "records_hex": [r.hex() for r in recs], "anchored": cps,
+           "log_trust": LOG_TRUST}
     inp.update(kw.pop("inp_extra", {}))
     extra = dict(LOG_EXTRA, intermediate={"heads_hex": [h.hex() for h in log.heads(LOG_ID, recs)]})
     vec(vid, desc, "log-audit", inp=inp, catalogue=catalogue, pending=pending, extra=extra, **kw)
@@ -1054,7 +1070,7 @@ def gen_log():
            log.build(LOG_ID, 4, NB + 4000, SESSION, 3, 2, decision=1, action=a3)]
     laudit("LOG-016", "Concurrent actions: type-1 for sequence 3 before type-1 for sequence 2", r16,
            [anchored(r16, 5)], pending=C, catalogue={"result": "accept", "verified_up_to": 4})
-    cp17 = dict(anchored(r, 5), timestamp_token_hex="3000")
+    cp17 = anchored(r, 5, timestamp=b"\x30\x00")
     laudit("LOG-017", "Anchored checkpoint with an RFC 3161 token that does not verify", r[:5], [cp17],
            pending="needs an RFC 3161 verifier and a TSA test fixture (not built; see finding F-41).",
            note="Expected: E_LOG_CHECKPOINT. The checkpoint signature is real and valid; the token is a "
@@ -1064,10 +1080,34 @@ def gen_log():
         "action", build_action(seq=1)))] + r[4:5])
     laudit("LOG-018", "Forked history with its own time-stamped checkpoint; auditor holds the original's", fork,
            [anchored(r, 5)], pending=C, catalogue=reject("E_LOG_CHAIN"),
-           inp_extra={"writer_only_checkpoints": [dict(anchored(fork, 5), timestamp_token_hex="3000")]},
+           inp_extra={"writer_only_checkpoints": [anchored(fork, 5, timestamp=b"\x30\x00")]},
            note="The writer's own checkpoint of the fork is validly signed and carries a (placeholder) time-stamp "
                 "token; it is not anchored, so the auditor ignores it.")
 
+    laudit("LOG-019", "Checkpoint COSE_Sign1 with alg in the unprotected header only", r[:5],
+           [anchored(r, 5, prot={4: LOG_KID}, unprot={1: -7})], catalogue=reject("E_LOG_CHECKPOINT"),
+           note="The unprotected header must be empty (Section 9.3); checked before the signature.")
+    laudit("LOG-020", "Checkpoint kid that is not a key of this log", r[:5],
+           [anchored(r, 5, prot={1: -7, 4: bytes.fromhex("ff" * 16)})], catalogue=reject("E_LOG_CHECKPOINT"),
+           note="The auditor's trust configuration has one key, kid 10c0...; checked before the signature.")
+    laudit("LOG-021", "Checkpoint ES256 signature with high S", r[:5], [anchored(r, 5, high_s=True)],
+           catalogue=reject("E_LOG_CHECKPOINT"),
+           note="The signature (r, n - s) is mathematically valid; checkpoints require low S (Section 9.3), "
+                "which is checked before the signature arithmetic.")
+    laudit("LOG-022", "Checkpoint head computed with sha-384 in a sha-256 log", r[:5], [anchored(r, 5, alg="sha-384")],
+           catalogue=reject("E_ALG_MISMATCH"), note="One hash algorithm per log (Section 9.6).")
+    rsa_trust = {"alg": "sha-256", "keys": [{"kid_hex": LOG_KID.hex(), "not_before": NB - 86_400_000,
+                                             "not_after": NB + 86_400_000,
+                                             "cose_key": {"kty": 3, "alg": -257, "n_hex": "c0" * 256,
+                                                          "e_hex": "010001"}}]}
+    laudit("LOG-023", "Log key with RS256", r[:5], [anchored(r, 5, prot={1: -257, 4: LOG_KID})],
+           catalogue=reject("E_LOG_CHECKPOINT"), inp_extra={"log_trust": rsa_trust},
+           note="RS256 is not allowed for log keys (Section 9.3); rejected before the signature.")
+    good = log.decode_bundle(bytes.fromhex(anchored(r, 5)))
+    unsorted = (b"\xa3" + cbor.encode(2) + cbor.encode(good.checkpoint) + cbor.encode(1) + cbor.encode("01")
+                + cbor.encode(3) + cbor.encode(good.cose_sign1))
+    laudit("LOG-024", "Checkpoint bundle with map keys out of deterministic order", r[:5], [unsorted.hex()],
+           catalogue=reject("E_LOG_CHECKPOINT"), note="Keys 2, 1, 3 instead of 1, 2, 3 (RFC 8949 4.2.1).")
 
 # --- E2E -------------------------------------------------------------------------
 
@@ -1130,11 +1170,11 @@ class Scenario:
 
     def checkpoint_and_audit(self, now):
         cp = self.px.checkpoint(now)
-        self.add(op="checkpoint", now=now, cose_sign1_hex=signed_checkpoint(cp)["cose_sign1_hex"])
+        self.add(op="checkpoint", now=now, cose_sign1_hex=sign_checkpoint(cp).hex())
         self.add(op="audit")
 
     def input(self):
-        return {"server": SID_D1, "log_id_hex": LOG_ID.hex(), "log_key": LOG_KEY, "steps": self.steps}
+        return {"server": SID_D1, "log_id_hex": LOG_ID.hex(), "log_trust": LOG_TRUST, "steps": self.steps}
 
 
 def e2e_context():
