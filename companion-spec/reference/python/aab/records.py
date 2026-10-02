@@ -27,6 +27,7 @@ from .errors import (
     E_JSON,
     E_LENGTH,
     E_MISSING_FIELD,
+    E_NOT_CANONICAL,
     E_TAG_ORDER,
     E_UNKNOWN_TAG,
     E_VALUE,
@@ -36,7 +37,7 @@ from .errors import (
 # is not specified (e.g. a record with an out-of-order tag *and* a missing
 # field). We use framing -> missing -> values -> cross-field (module docstring).
 
-WIRE_VERSION = "00"
+WIRE_VERSION = "01"
 
 HASHES = {
     "sha-256": (hashlib.sha256, 32),
@@ -69,7 +70,7 @@ def domain_prefix(object_type: str, alg: str) -> bytes:
 
 
 def digest(object_type: str, body: bytes, alg: str = "sha-256") -> bytes:
-    """``H_alg(lp(utf8("aab/00/" + object_type + "/" + alg)) || body)``."""
+    """``H_alg(lp(utf8("aab/01/" + object_type + "/" + alg)) || body)``."""
     if object_type not in OBJECT_TYPES:
         raise ValueError("unknown object type %r" % object_type)
     if alg not in HASHES:
@@ -232,11 +233,8 @@ def f_json(require_object: bool = False):
     """A ``jcs(v)`` field: strict parse, then require canonical bytes."""
     def dec(v, cfg):
         val = jsonstrict.parse(v)
-        # SPEC-AMBIGUITY: 4.2/4.3: nothing says a consumer must check that a
-        # jcs() field is canonical, nor which error applies. The forwarding
-        # rule (6.3) depends on it, so we require it and use E_JSON.
         if jcs.jcs(val) != bytes(v):
-            raise AabError(E_JSON, "JSON field is not in RFC 8785 canonical form")
+            raise AabError(E_NOT_CANONICAL, "JSON field is not in RFC 8785 canonical form")
         if require_object and not isinstance(val, dict):
             raise AabError(E_JSON, "JSON field is not an object")
         return val

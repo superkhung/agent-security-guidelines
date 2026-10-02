@@ -4,7 +4,8 @@
 import unittest
 
 import context  # noqa: F401
-from aab import cbor
+from aab import cbor, evidence
+from aab.errors import AabError
 
 
 class Decode(unittest.TestCase):
@@ -39,6 +40,41 @@ class Decode(unittest.TestCase):
     def test_tag(self):
         v = cbor.decode(bytes.fromhex("d28440a0f640"), deterministic=False)
         self.assertEqual(v, cbor.Tag(18, [b"", {}, None, b""]))
+
+
+class Container(unittest.TestCase):
+    def container(self, version="01", **over):
+        m = {1: version, 2: "device-key", 3: b"x", 4: b"c", 9: b"s", 10: b"r", 11: "action"}
+        m.update(over)
+        return cbor.encode({k: v for k, v in m.items() if v is not None})
+
+    def code(self, data, expected_object="action"):
+        try:
+            evidence.decode_container(data, expected_object)
+        except AabError as exc:
+            return exc.code
+        return None
+
+    def test_container_version(self):
+        self.assertEqual(self.code(self.container(0)), "E_CBOR")
+        self.assertEqual(self.code(self.container("00")), "E_CBOR")
+        self.assertIsNone(self.code(self.container("01")))
+
+    def test_object_key_required(self):
+        self.assertEqual(self.code(cbor.encode({1: "01", 2: "device-key", 3: b"x", 4: b"c", 9: b"s", 10: b"r"})),
+                         "E_CBOR")
+
+    def test_object_key_mismatch(self):
+        self.assertEqual(self.code(self.container(), expected_object="lease"), "E_CBOR")
+        self.assertIsNone(self.code(self.container(), "action"))
+
+    def test_object_key_wrong_type(self):
+        data = cbor.encode({1: "01", 2: "device-key", 3: b"x", 4: b"c", 9: b"s", 10: b"r", 11: 1})
+        self.assertEqual(self.code(data), "E_CBOR")
+
+    def test_object_key_unknown_value(self):
+        data = cbor.encode({1: "01", 2: "device-key", 3: b"x", 4: b"c", 9: b"s", 10: b"r", 11: "checkpoint"})
+        self.assertEqual(self.code(data, expected_object="checkpoint"), "E_CBOR")
 
 
 if __name__ == "__main__":

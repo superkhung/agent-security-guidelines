@@ -22,6 +22,7 @@ from .errors import (
     E_SESSION,
     E_TAG_ORDER,
     E_VALUE,
+    E_WA_COUNTER,
 )
 from .identity import ServerIdentity
 from .identity import decode as decode_identity
@@ -44,6 +45,7 @@ from .records import (
 
 OBJECT_TYPE = "lease"
 MAX_WINDOW_MS = 28_800_000
+GRANT_WINDOW_MS = 300_000  # Section 8.4 check 5, the action approval window of 6.1
 
 OPS = ("eq", "prefix", "beneath", "in", "max", "absent")
 
@@ -168,9 +170,9 @@ def _valid_pointer(p) -> bool:
 
 
 def validate_constraints(constraints, tool_names: Set[str]) -> None:
-    """Grant-time validation (Section 8.3, 8.4 check 8). Failures are E_VALUE."""
+    """Grant-time validation (Section 8.3, 8.4 check 9). Failures are E_VALUE."""
     # SPEC-AMBIGUITY: 8.1/8.3: `constraints` that is valid JSON but not an
-    # array has no stated error. We treat it as malformed (E_VALUE at check 8).
+    # array has no stated error. We treat it as malformed (E_VALUE at check 9).
     if not isinstance(constraints, list):
         raise AabError(E_VALUE, "constraints is not an array")
     for c in constraints:
@@ -195,8 +197,7 @@ def validate_constraints(constraints, tool_names: Set[str]) -> None:
         if "tool" in c:
             if not isinstance(c["tool"], str):
                 raise AabError(E_VALUE, "tool is not a string")
-            # SPEC-AMBIGUITY: 8.3: a `tool` naming no tool in the lease makes the
-            # constraint silently inert (fail-open on a typo). We reject it.
+            # Section 8.3: `tool` must name a tool in the lease.
             if c["tool"] not in tool_names:
                 raise AabError(E_VALUE, "constraint names a tool not in the lease")
         v = c.get("value")
@@ -281,7 +282,7 @@ def check_constraints(constraints, tool_name: str, arguments) -> None:
 
 
 class GrantState:
-    """Lease ids ever granted, and tool policy classification (8.4 checks 5, 7)."""
+    """Lease ids ever granted, and tool policy classification (8.4 checks 6, 8)."""
 
     def __init__(self, granted: Iterable[bytes] = (), forbidden_tools: Optional[Dict[Tuple[bytes, str], str]] = None):
         self.granted: Set[bytes] = set(granted)
@@ -290,19 +291,21 @@ class GrantState:
 
 
 def check_lease_record(rec: dict, ctx: evidence.ApprovalContext, grants: GrantState) -> None:
-    """Lease record checks 1-8 of Section 8.4 step 3."""
+    """Lease record checks 1-9 of Section 8.4 step 3."""
     st = ctx.state
     if rec["session"] not in st.open_sessions or rec["session"] != st.request_session:
         raise AabError(E_SESSION, "lease session not open or not the grant's session")
+    if rec["grantee"] not in st.session_agents.get(rec["session"], set()):
+        raise AabError(E_LEASE_SCOPE, "grantee %r is not an agent of the session" % rec["grantee"])
     if rec["audience"] != st.proxy_id:
         raise AabError(E_AUDIENCE, "audience %r" % rec["audience"])
     if not window_ok(rec["not_before"], rec["not_after"], MAX_WINDOW_MS):
         raise AabError(E_EXPIRED, "lease window invalid or longer than 8 hours")
-    # SPEC-AMBIGUITY: 8.4 check 4: only expiry is checked at grant; a lease
-    # whose not_before lies far in the future (a pre-signed lease) is
-    # accepted. We apply the check as written.
-    if st.now > rec["not_after"] + SKEW_MS:
-        raise AabError(E_EXPIRED, "lease already expired")
+    # Check 5: not_before is the grant challenge time (Section 8.1), and the
+    # grant is verified within the action approval window of it.
+    if (st.now < rec["not_before"] - SKEW_MS or st.now > rec["not_before"] + GRANT_WINDOW_MS + SKEW_MS
+            or st.now > rec["not_after"] + SKEW_MS):
+        raise AabError(E_EXPIRED, "grant outside its window, or lease already expired")
     if rec["lease_id"] in grants.granted:
         raise AabError(E_REPLAY, "lease id granted before")
     for e in rec["tools"]:
@@ -317,28 +320,25 @@ def check_lease_record(rec: dict, ctx: evidence.ApprovalContext, grants: GrantSt
 
 def verify_grant(data: bytes, ctx: evidence.ApprovalContext, grants: GrantState) -> dict:
     """Section 8.4. On success the lease id is recorded permanently."""
-    m = evidence.decode_container(data)                                   # step 1
-    ref, rec = evidence.bind_record(m, OBJECT_TYPE, decode, ctx.state.cfg)  # step 2
+    m = evidence.decode_container(data, OBJECT_TYPE)                      # step 1
+    ref, rec = evidence.bind_record(m, decode, ctx.state.cfg)             # step 2
     check_lease_record(rec, ctx, grants)                                  # step 3
-    # SPEC-AMBIGUITY: 8.4 step 4 / 7.2 step 4: which action class a lease
-    # grant needs is not defined. We require the grantor to be authorized
-    # for the class of every tool in the lease.
+    # Step 4: the grantor must be authorized for the class of every tool.
     classes = [ctx.tool_classes.get(e.name) for e in rec["tools"]]
-    # SPEC-AMBIGUITY: 8.4 steps 1 and 4 say "Step 1 of Section 7.3" and "the
-    # remaining steps of Section 7.3", but 7.3 step 1 *is* 7.2 steps 1-4, so a
-    # literal reading skips the credential check for device-key grants. We
-    # run 7.2 step 4 for both profiles, then the profile's remaining steps.
     cred = evidence.lookup_credential(ctx, m[4], classes, rec["grantor"])  # step 4 (7.2 step 4)
     count = None
     if m[2] == evidence.WEBAUTHN:
         count = evidence.webauthn_tail(ctx, m, ref, cred)                 # 7.2 steps 5-8
     else:
         evidence.device_key_tail(ctx, m, cred)                            # 7.3 steps 2-8
+    # One atomic step (Section 8.4): lease id and counter, then record both.
     if rec["lease_id"] in grants.granted:
         raise AabError(E_REPLAY, "lease id granted concurrently")
+    if count is not None and not evidence.counter_ok(cred, count, rec["not_before"], ctx.state.now):
+        raise AabError(E_WA_COUNTER, "signCount %d not above the snapshot or already used" % count)
     grants.granted.add(rec["lease_id"])
     if count is not None:
-        cred.counter = count
+        evidence.commit_counter(cred, count, ctx.state.now)
     return {"record": rec, "digest": ref}
 
 
@@ -355,17 +355,14 @@ class LeaseUsage:
 
 
 def enforce_call(rec: dict, usage: LeaseUsage, now: int, session: bytes, server: ServerIdentity,
-                 name: str, current_fp: Optional[DigestRef], arguments, budget_mode: str = "reject",
-                 agent_id: Optional[str] = None) -> str:
+                 name: str, current_fp: Optional[DigestRef], arguments, budget_mode: str = "reject", *,
+                 agent_id: str) -> str:
     """The checks of Section 8.2 rule 4. Returns ``"accept"`` or ``"escalate"``."""
     if usage.revoked:
         raise AabError(E_LEASE_REVOKED, "lease revoked")
     if session != rec["session"]:
         raise AabError(E_SESSION, "call session is not the lease session")
-    # SPEC-AMBIGUITY: 8.2: the grantee (field 0x05) is never checked at
-    # enforcement. We check it when the caller supplies the agent id, with
-    # E_LEASE_SCOPE, right after the session check.
-    if agent_id is not None and agent_id != rec["grantee"]:
+    if agent_id != rec["grantee"]:
         raise AabError(E_LEASE_SCOPE, "agent is not the grantee")
     if now < rec["not_before"] - SKEW_MS or now > rec["not_after"] + SKEW_MS:
         raise AabError(E_EXPIRED, "outside the lease window")

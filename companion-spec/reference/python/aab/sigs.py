@@ -26,9 +26,8 @@ CRV_P256, CRV_ED25519, CRV_ED448 = 1, 6, 7
 
 P256_N = int("FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551", 16)
 
-#: Section 7.5 "MUST, equivalent to": the fully specified and polymorphic ids.
-# SPEC-AMBIGUITY: 7.3 step 5 / 7.5: "or its equivalent" is not said to be
-# symmetric (registered -19, header -8?). We treat equivalence as symmetric.
+#: Section 7.5 "MUST, equivalent to": the fully specified and polymorphic ids,
+#: in both directions (Section 7.3 step 5).
 EQUIVALENT = {ES256: ES256, ESP256: ES256, EDDSA: EDDSA, ED25519: EDDSA, RS256: RS256}
 
 
@@ -139,6 +138,11 @@ def check_key(key: dict, profile: str, accept_rs256: bool) -> int:
     return eff
 
 
+def low_s(raw_sig: bytes) -> bool:
+    """True if the ``s`` half of a 64-byte ES256 ``r || s`` is at most n/2."""
+    return int.from_bytes(raw_sig[32:64], "big") <= P256_N // 2
+
+
 def verify(key: dict, message: bytes, signature: bytes, profile: str, backend: SignatureBackend,
            accept_rs256: bool = False) -> None:
     """Run the signature step for ``profile`` ('webauthn', 'device-key', 'checkpoint')."""
@@ -150,6 +154,8 @@ def verify(key: dict, message: bytes, signature: bytes, profile: str, backend: S
         else:
             if len(signature) != 64:
                 raise SignatureFailure("COSE ES256 signature must be raw r||s, 64 bytes")
+            if profile == "checkpoint" and not low_s(signature):
+                raise SignatureFailure("checkpoint ES256 signature must be low-S (Section 9.3)")
             rs = (int.from_bytes(signature[:32], "big"), int.from_bytes(signature[32:], "big"))
     elif eff == EDDSA:
         if len(signature) != 64:

@@ -3,7 +3,7 @@
 
 import unittest
 
-import context  # noqa: F401
+import context
 from aab import lease
 from aab.errors import AabError
 
@@ -67,6 +67,53 @@ class Constraints(unittest.TestCase):
         cs = [{"tool": "write_file", "pointer": "/path", "op": "beneath", "value": "src"}]
         self.assertIsNone(code(lease.check_constraints, cs, "read_file", {"path": "/etc/passwd"}))
         self.assertEqual(code(lease.check_constraints, cs, "write_file", {"path": "/etc/passwd"}), "E_LEASE_CONSTRAINT")
+
+
+
+class Grantee(unittest.TestCase):
+    """F-3: the grantee is checked at grant and on every call."""
+
+    def setUp(self):
+        from aab import records, vectorexec
+        self.records = records
+        self.rec = lease.decode(bytes.fromhex(context.load_vector("LS-001")["input"]["lease_hex"]))
+        self.ctx_json = context.load_vector("LS-008")["context"]
+        self.vectorexec = vectorexec
+
+    def grant_code(self, agents):
+        ctx_json = dict(self.ctx_json, session_agents={self.ctx_json["request_session"]: agents})
+        ctx = self.vectorexec.build_approval_context(ctx_json)
+        return code(lease.check_lease_record, self.rec, ctx, lease.GrantState())
+
+    def test_grantee_not_in_session(self):
+        self.assertEqual(self.grant_code(["agent-2"]), "E_LEASE_SCOPE")
+        self.assertIsNone(self.grant_code(["agent-1", "agent-2"]))
+
+    def grant_code_at(self, now):
+        ctx_json = dict(self.ctx_json, now=now)
+        ctx = self.vectorexec.build_approval_context(ctx_json)
+        return code(lease.check_lease_record, self.rec, ctx, lease.GrantState())
+
+    def test_grant_window(self):
+        """not_before is the grant challenge time; the grant is verified within 330 000 ms of it."""
+        nb = self.rec["not_before"]
+        self.assertIsNone(self.grant_code_at(nb + 330_000))
+        self.assertEqual(self.grant_code_at(nb + 330_001), "E_EXPIRED")
+        self.assertIsNone(self.grant_code_at(nb - 30_000))
+        self.assertEqual(self.grant_code_at(nb - 30_001), "E_EXPIRED")
+
+    def call(self, **kw):
+        e = self.rec["tools"][0]
+        return lease.enforce_call(self.rec, lease.LeaseUsage(), self.rec["not_before"], self.rec["session"],
+                                  e.server, e.name, e.fingerprint, {"path": "src/a.py"}, **kw)
+
+    def test_call_by_other_agent(self):
+        self.assertEqual(code(lambda: self.call(agent_id="agent-2")), "E_LEASE_SCOPE")
+        self.assertEqual(self.call(agent_id="agent-1"), "accept")
+
+    def test_agent_id_required(self):
+        with self.assertRaises(TypeError):
+            self.call()
 
 
 if __name__ == "__main__":

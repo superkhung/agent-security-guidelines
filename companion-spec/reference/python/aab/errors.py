@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Error codes of aab-00 (Section 10) and implementation-level exceptions.
+"""Error codes of aab-01 (Section 10) and implementation-level exceptions.
 
 ``AabError`` carries exactly one code from Section 10. Two further
 exceptions are *not* spec outcomes and must never be mapped to an ``E_*``
@@ -23,6 +23,7 @@ E_VALUE = "E_VALUE"
 E_DUP_KEY = "E_DUP_KEY"
 E_NUMBER = "E_NUMBER"
 E_JSON = "E_JSON"
+E_NOT_CANONICAL = "E_NOT_CANONICAL"
 E_ALG_MISMATCH = "E_ALG_MISMATCH"
 E_FP_CHANGED = "E_FP_CHANGED"
 E_REPLAY = "E_REPLAY"
@@ -61,7 +62,7 @@ class AabError(Exception):
 
     def __init__(self, code: str, detail: str = ""):
         if code not in ALL_CODES:
-            raise ValueError("not an aab-00 error code: %r" % code)
+            raise ValueError("not an aab-01 error code: %r" % code)
         super().__init__("%s: %s" % (code, detail) if detail else code)
         self.code = code
         self.detail = detail

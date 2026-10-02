@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Tuple
 
 from . import action as action_mod
 from . import cbor, jsonstrict, sigs
@@ -21,6 +21,7 @@ from .errors import (
     E_CREDENTIAL,
     E_DIGEST_MISMATCH,
     E_JSON,
+    E_REPLAY,
     E_WA_AUTHDATA,
     E_WA_CHALLENGE,
     E_WA_COUNTER,
@@ -30,30 +31,42 @@ from .errors import (
     E_WA_SIGNATURE,
     E_WA_TYPE,
 )
-from .records import DigestRef, decode_digest_ref, ref_of
+from .records import WIRE_VERSION, DigestRef, decode_digest_ref, ref_of
 
 WEBAUTHN, DEVICE_KEY = "webauthn", "device-key"
 
 # key -> (name, CBOR type)
-_KEYS = {1: int, 2: str, 3: bytes, 4: bytes, 5: bytes, 6: bytes, 7: bytes, 8: bytes, 9: bytes, 10: bytes}
-_COMMON = {1, 2, 3, 4, 10}
+_KEYS = {1: str, 2: str, 3: bytes, 4: bytes, 5: bytes, 6: bytes, 7: bytes, 8: bytes, 9: bytes, 10: bytes, 11: str}
+_COMMON = {1, 2, 3, 4, 10, 11}
+OBJECTS = ("action", "lease")
 _REQUIRED = {WEBAUTHN: _COMMON | {5, 6, 7}, DEVICE_KEY: _COMMON | {9}}
 _ALLOWED = {WEBAUTHN: _REQUIRED[WEBAUTHN] | {8}, DEVICE_KEY: _REQUIRED[DEVICE_KEY]}
 
 UP, UV, BE, BS, AT, ED = 0x01, 0x04, 0x08, 0x10, 0x40, 0x80
 
+# Section 7.2 step 8: accepted counters are kept at least this long
+# (validity window 300 000 ms plus twice the skew allowance).
+RETENTION_MS = 360_000
+
 
 class Credential:
-    """One entry of the verifier's credential registry (Section 7.2)."""
+    """One entry of the verifier's credential registry (Section 7.2).
+
+    ``counter`` is the base value: the counter at registration, raised by
+    acceptances older than :data:`RETENTION_MS`. ``history`` holds the
+    ``(accepted_at_ms, counter)`` pairs of the acceptances kept.
+    """
 
     def __init__(self, cred_id: bytes, approver: str, key: dict, user_handle: Optional[bytes] = None,
-                 be: bool = False, counter: int = 0, classes: Iterable[str] = (), revoked: bool = False):
+                 be: bool = False, counter: int = 0, classes: Iterable[str] = (), revoked: bool = False,
+                 history: Iterable[Tuple[int, int]] = ()):
         self.id = cred_id
         self.approver = approver
         self.key = key
         self.user_handle = user_handle
         self.be = be
         self.counter = counter
+        self.history = [tuple(h) for h in history]
         self.classes = set(classes)
         self.revoked = revoked
 
@@ -78,8 +91,12 @@ class ApprovalContext:
 # --- step 1: container -------------------------------------------------------
 
 
-def decode_container(data: bytes, expected_profile: Optional[str] = None) -> dict:
-    """Section 7.1 and step 1 of Section 7.2/7.3. All failures are E_CBOR."""
+def decode_container(data: bytes, expected_object: str, expected_profile: Optional[str] = None) -> dict:
+    """Section 7.1 and step 1 of Section 7.2/7.3. All failures are E_CBOR.
+
+    ``expected_object`` is the operation of the endpoint: ``"action"`` for an
+    action approval, ``"lease"`` for a lease grant (key 11).
+    """
     try:
         m = cbor.decode(data, deterministic=True)
     except cbor.CborError as exc:
@@ -92,8 +109,8 @@ def decode_container(data: bytes, expected_profile: Optional[str] = None) -> dic
         t = _KEYS[k]
         if not isinstance(v, t) or isinstance(v, bool):
             raise AabError(E_CBOR, "container key %d has the wrong type" % k)
-    if m.get(1) != 0:
-        raise AabError(E_CBOR, "version is not 0")
+    if m.get(1) != WIRE_VERSION:
+        raise AabError(E_CBOR, "version is not %r" % WIRE_VERSION)
     profile = m.get(2)
     if profile not in _REQUIRED:
         raise AabError(E_CBOR, "unknown profile %r" % (profile,))
@@ -104,18 +121,24 @@ def decode_container(data: bytes, expected_profile: Optional[str] = None) -> dic
         raise AabError(E_CBOR, "missing keys %s" % sorted(_REQUIRED[profile] - keys))
     if not keys <= _ALLOWED[profile]:
         raise AabError(E_CBOR, "keys %s not allowed for %s" % (sorted(keys - _ALLOWED[profile]), profile))
+    if m[11] not in OBJECTS:
+        raise AabError(E_CBOR, "unknown object type %r" % m[11])
+    if m[11] != expected_object:
+        raise AabError(E_CBOR, "object %r not accepted here (expected %r)" % (m[11], expected_object))
     return m
 
 
 # --- step 2: record ---------------------------------------------------------
 
 
-def bind_record(m: dict, object_type: str, decoder, cfg):
-    """Step 2 of Section 7.2: key 3 as digest ref, key 10 decoded, digests equal."""
-    # SPEC-AMBIGUITY: 7.1/8.4: the container does not say whether key 10 is an
-    # action or a lease record; the verifier must know from context which one
-    # it expects. We take `object_type` from the caller (the endpoint).
-    ref =decode_digest_ref(m[3], cfg.alg(object_type))
+def bind_record(m: dict, decoder, cfg):
+    """Step 2 of Section 7.2: key 3 as digest ref, key 10 decoded, digests equal.
+
+    The object type is key 11, already checked against the endpoint by
+    :func:`decode_container`.
+    """
+    object_type = m[11]
+    ref = decode_digest_ref(m[3], cfg.alg(object_type))
     rec = decoder(m[10], cfg)
     if ref_of(object_type, m[10], ref.alg).encode() != m[3]:
         raise AabError(E_DIGEST_MISMATCH, "record digest differs from key 3")
@@ -212,15 +235,26 @@ def webauthn_tail(ctx: ApprovalContext, m: dict, ref: DigestRef, cred: Credentia
         sigs.verify(cred.key, message, m[7], WEBAUTHN, ctx.backend, ctx.accept_rs256)
     except sigs.SignatureFailure as exc:
         raise AabError(E_WA_SIGNATURE, str(exc))
-    count = info["sign_count"]
-    # SPEC-AMBIGUITY: 7.2 step 8 vs 6.2 rule 1: approvals may complete in any
-    # order, but with a counter-using authenticator two assertions signed as
-    # (n, n+1) and presented as (n+1, n) make the second fail E_WA_COUNTER.
-    # The spec also does not say how the counter update and the pending-entry
-    # compare-and-delete are made atomic together. We apply step 8 as written.
-    if (cred.counter != 0 or count != 0) and not count > cred.counter:
-        raise AabError(E_WA_COUNTER, "signCount %d not greater than %d" % (count, cred.counter))
-    return count
+    return info["sign_count"]   # step 8 runs in the atomic step (counter_ok)
+
+
+def counter_ok(cred: Credential, received: int, not_before: int, now: int) -> bool:
+    """Step 8 of Section 7.2: compare with the snapshot at ``not_before``."""
+    t = max(not_before, now - RETENTION_MS)
+    c_max = max([cred.counter] + [c for _, c in cred.history])
+    if c_max == 0 and received == 0:
+        return True
+    c_snap = max([cred.counter] + [c for at, c in cred.history if at <= t])
+    later = {c for at, c in cred.history if at > t}
+    return received > c_snap and received not in later
+
+
+def commit_counter(cred: Credential, received: int, now: int) -> None:
+    """Record an accepted counter; fold acceptances older than RETENTION_MS into the base."""
+    cutoff = now - RETENTION_MS
+    old = [c for at, c in cred.history if at < cutoff]
+    cred.counter = max([cred.counter] + old)
+    cred.history = [(at, c) for at, c in cred.history if at >= cutoff] + [(now, received)]
 
 
 # --- steps 2-8 of Section 7.3: device key -----------------------------------
@@ -265,8 +299,7 @@ def device_key_tail(ctx: ApprovalContext, m: dict, cred: Credential) -> None:
         raise AabError(E_COSE, "kid differs from key 4")
     alg = prot[1]
     reg = cred.key.get("alg")
-    # SPEC-AMBIGUITY: 7.3 step 5 / 7.5: RS256 is "not allowed" for device-key
-    # but no step says where it is rejected. We reject it here with E_COSE.
+    # Step 5: RS256 is not allowed for device-key (Section 7.5).
     if (not isinstance(alg, int) or isinstance(alg, bool) or alg not in sigs.EQUIVALENT
             or reg not in sigs.EQUIVALENT or sigs.EQUIVALENT[alg] != sigs.EQUIVALENT[reg]
             or sigs.EQUIVALENT[reg] == sigs.RS256):
@@ -286,9 +319,9 @@ def device_key_tail(ctx: ApprovalContext, m: dict, cred: Credential) -> None:
 
 def verify_action(data: bytes, ctx: ApprovalContext) -> dict:
     """Verify approval evidence for one action; consume its pending entry on success."""
-    m = decode_container(data)                                   # step 1
+    m = decode_container(data, "action")                         # step 1
     state = ctx.state
-    ref, rec = bind_record(m, "action", action_mod.decode, state.cfg)  # step 2
+    ref, rec = bind_record(m, action_mod.decode, state.cfg)      # step 2
     action_mod.check_record(rec, state, m[3])                    # step 3
     cred = lookup_credential(ctx, m[4], [ctx.tool_classes.get(rec["name"])],
                              rec.get("approver"))                # step 4
@@ -297,7 +330,13 @@ def verify_action(data: bytes, ctx: ApprovalContext) -> dict:
         count = webauthn_tail(ctx, m, ref, cred)                 # steps 5-8
     else:
         device_key_tail(ctx, m, cred)                            # 7.3 steps 2-8
+    # One atomic step (Section 6.2 rule 5, 7.2): check the pending entry and
+    # the counter, then consume and commit; nothing changes if either fails.
+    if state.pending.get((rec["session"], rec["sequence"])) != m[3]:
+        raise AabError(E_REPLAY, "pending entry already consumed")
+    if count is not None and not counter_ok(cred, count, rec["not_before"], state.now):
+        raise AabError(E_WA_COUNTER, "signCount %d not above the snapshot or already used" % count)
     state.consume(rec["session"], rec["sequence"], m[3])
     if count is not None:
-        cred.counter = count
+        commit_counter(cred, count, state.now)
     return {"record": rec, "digest": ref}

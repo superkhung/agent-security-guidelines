@@ -28,7 +28,7 @@ class AppendixD1(unittest.TestCase):
 
     def test_domain_prefix(self):
         self.assertEqual(records.domain_prefix("tool-fp", "sha-256").hex(),
-                         "00000016" "6161622f30302f746f6f6c2d66702f7368612d323536")
+                         "00000016" "6161622f30312f746f6f6c2d66702f7368612d323536")
 
     def test_record_start_and_length(self):
         rec = fingerprint.record(SERVER, TOOL)
@@ -38,12 +38,12 @@ class AppendixD1(unittest.TestCase):
 
     def test_fingerprints(self):
         self.assertEqual(fingerprint.fingerprint(SERVER, TOOL).text(),
-                         "sha-256:U2Q4CNaBoz71PtbKXEotxCxzb_PkZ0_gm4DMcKRWUa0")
+                         "sha-256:6VAE1fKv57q2AHsl4XzJlVGMWewgDSkWvwqWqnP5AJo")
         self.assertEqual(fingerprint.fingerprint(SERVER, dict(TOOL, name="read_secret")).text(),
-                         "sha-256:oAKxl7KFWAN2ffZpEH2B-TMZZY6WAetlqckp3T6Qj08")
+                         "sha-256:Juqlw0ZAIHUsGCFUpU1H3NfF2iLFA4v6j9QoBRDmrJI")
         ann = {"readOnlyHint": True, "destructiveHint": True}
         self.assertEqual(fingerprint.fingerprint(SERVER, dict(TOOL, annotations=ann)).text(),
-                         "sha-256:zPeISc33LtI6rfSV-U2mfHa4mO2_3RqU0iVDiJRowwI")
+                         "sha-256:lxYHfv0gPLX6sBcbexjQbNzfJlg3JLGV6aVpi-wrbGo")
 
 
 class AppendixD2(unittest.TestCase):
@@ -52,8 +52,8 @@ class AppendixD2(unittest.TestCase):
         rec = action.build("https://proxy.example.internal", bytes.fromhex("000102030405060708090a0b0c0d0e0f"),
                            7, SERVER, "read_file", fp, {"path": "src/main.py"}, 1790000000000, 1790000120000)
         ref = action.digest_ref(rec)
-        self.assertEqual(ref.text(), "sha-256:TNrzsHt4kGTrvz_NDchY22aNsZmz9zdfmvbLPGPUGx0")
-        self.assertEqual(b64u(ref.digest), "TNrzsHt4kGTrvz_NDchY22aNsZmz9zdfmvbLPGPUGx0")
+        self.assertEqual(ref.text(), "sha-256:U83t2isReTyp9aj0TgFYTP_E71W8bJh7QQIxVKNDzO4")
+        self.assertEqual(b64u(ref.digest), "U83t2isReTyp9aj0TgFYTP_E71W8bJh7QQIxVKNDzO4")
         # The record decodes back to the same fields.
         d = action.decode(rec)
         self.assertEqual(d["sequence"], 7)

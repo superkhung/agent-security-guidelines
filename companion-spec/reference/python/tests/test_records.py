@@ -27,6 +27,32 @@ def raw(fields):
     return b"".join(encode_field(t, v) for t, v in fields)
 
 
+class WireVersion(unittest.TestCase):
+    def test_domain_prefix_is_aab_01(self):
+        self.assertEqual(records.domain_prefix("tool-fp", "sha-256"), lp(b"aab/01/tool-fp/sha-256"))
+
+
+class CanonicalJson(unittest.TestCase):
+    """F-7: a jcs() field inside a record must already be canonical."""
+
+    def action_with_args(self, args_bytes):
+        from aab import action
+        sid = identity.make("oci", "registry.example.internal/mcp/files@sha256:" + "ab" * 32)
+        fp = records.DigestRef("sha-256", bytes(32))
+        return action.build("https://proxy.example.internal", bytes(16), 1, sid, "read_file", fp, None,
+                            0, 1000, arguments_bytes=args_bytes)
+
+    def test_not_canonical(self):
+        from aab import action
+        rec = self.action_with_args(b'{"path": "src/main.py"}')
+        self.assertEqual(code(action.decode, rec), "E_NOT_CANONICAL")
+
+    def test_dup_key_before_not_canonical(self):
+        from aab import action
+        rec = self.action_with_args(b'{"b":1, "b":2}')
+        self.assertEqual(code(action.decode, rec), "E_DUP_KEY")
+
+
 class TaggedRecords(unittest.TestCase):
     def test_valid_checkpoint(self):
         d = log.decode_checkpoint(raw(CP))

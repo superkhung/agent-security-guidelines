@@ -1,6 +1,6 @@
 name: Companion spec (aab)
 description: Comments on Agent Action Binding - Wire Format and Test Vectors
-title: "[aab-00] "
+title: "[aab-01] "
 labels: ["companion-spec"]
 body:
   - type: markdown

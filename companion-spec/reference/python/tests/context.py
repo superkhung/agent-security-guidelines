@@ -14,7 +14,7 @@ import warnings
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 VECTORS = os.path.normpath(os.path.join(ROOT, "..", "..", "vectors"))
-SPEC = os.path.normpath(os.path.join(ROOT, "..", "..", "agent-action-binding-draft-00.md"))
+SPEC = os.path.normpath(os.path.join(ROOT, "..", "..", "agent-action-binding-draft-01.md"))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 warnings.simplefilter("ignore", RuntimeWarning)

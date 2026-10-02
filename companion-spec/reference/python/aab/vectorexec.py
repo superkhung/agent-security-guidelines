@@ -70,7 +70,7 @@ def build_state(ctx: dict) -> action.VerifierState:
         proxy_id=ctx.get("proxy_id", ""), now=ctx.get("now", 0),
         open_sessions=[bytes.fromhex(s) for s in ctx.get("open_sessions", [])],
         request_session=_hex(ctx.get("request_session")), pending=pending, current_fps=fps,
-        cfg=_cfg(ctx))
+        cfg=_cfg(ctx), session_agents={bytes.fromhex(k): v for k, v in ctx.get("session_agents", {}).items()})
 
 
 def build_approval_context(ctx: dict) -> evidence.ApprovalContext:
@@ -79,7 +79,8 @@ def build_approval_context(ctx: dict) -> evidence.ApprovalContext:
         creds.append(evidence.Credential(
             bytes.fromhex(c["id_hex"]), c["approver"], _cose_key(c["cose_key"]),
             user_handle=_hex(c.get("user_handle_hex")), be=c.get("be", False),
-            counter=c.get("counter", 0), classes=c.get("classes", []), revoked=c.get("revoked", False)))
+            counter=c.get("counter", 0), classes=c.get("classes", []), revoked=c.get("revoked", False),
+            history=[tuple(h) for h in c.get("history", [])]))
     return evidence.ApprovalContext(
         build_state(ctx), creds, tool_classes=ctx.get("tool_classes"), rp_id=ctx.get("rp_id", ""),
         allowed_origins=ctx.get("allowed_origins", []), forbid_synced=ctx.get("forbid_synced", False),
@@ -242,7 +243,7 @@ def h_lease_call(v, inp, ctx):
                 rec, usage, call["now"], bytes.fromhex(call["session_hex"]), _server(call["server"]),
                 call["name"], records.parse_ref_text(fp) if fp else None,
                 jsonstrict.parse(call["arguments_json_text"].encode("utf-8")),
-                budget_mode=call.get("budget_mode", "reject"), agent_id=call.get("agent_id"))
+                budget_mode=call.get("budget_mode", "reject"), agent_id=call["agent_id"])
             return {"result": res}
         outs.append(_run(one))
     last = outs[-1]
@@ -251,14 +252,18 @@ def h_lease_call(v, inp, ctx):
     return out
 
 
+def _trust(d: dict) -> log.LogTrust:
+    return log.LogTrust(d["alg"], {bytes.fromhex(k["kid_hex"]): log.LogKey(_cose_key(k["cose_key"]), k["not_before"],
+                                                                          k["not_after"]) for k in d["keys"]})
+
+
 def h_log_audit(v, inp, ctx):
-    anchored = [log.AnchoredCheckpoint(bytes.fromhex(a["record_hex"]), bytes.fromhex(a["cose_sign1_hex"]),
-                                       _hex(a.get("timestamp_token_hex"))) for a in inp.get("anchored", [])]
+    anchored = [bytes.fromhex(b) for b in inp.get("anchored", [])]
     store = None
     if "payload_store" in inp:
         store = {records.parse_ref_text(p).digest: b"" for p in inp["payload_store"]}
     res = log.audit([bytes.fromhex(r) for r in inp["records_hex"]], anchored, bytes.fromhex(inp["log_id_hex"]),
-                    _cose_key(inp.get("log_key", {})), backend=_BACKEND[0], cfg=_cfg(ctx),
+                    _trust(inp["log_trust"]), backend=_BACKEND[0], cfg=_cfg(ctx),
                     payload_store=store)
     if res["error"]:
         return {"result": "reject", "error": res["error"]}
@@ -303,10 +308,10 @@ def h_e2e(v, inp, ctx):
                 return {"result": "ok"}
             if op == "checkpoint":
                 rec = px.checkpoint(st["now"])
-                anchored.append(log.AnchoredCheckpoint(rec, bytes.fromhex(st["cose_sign1_hex"])))
+                anchored.append(log.encode_bundle(rec, bytes.fromhex(st["cose_sign1_hex"])))
                 return {"result": "ok", "record_hex": rec.hex()}
             if op == "audit":
-                res = log.audit(px.writer.records, anchored, px.writer.log_id, _cose_key(inp["log_key"]),
+                res = log.audit(px.writer.records, anchored, px.writer.log_id, _trust(inp["log_trust"]),
                                 backend=_BACKEND[0], cfg=_cfg(ctx))
                 if res["error"]:
                     return {"result": "reject", "error": res["error"]}

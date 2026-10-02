@@ -1,22 +1,24 @@
-# Findings from the first implementation of aab-00
+# Findings from the reference implementation
 
-Writing `reference-python-1` turned up the places below where `aab-00` is ambiguous, contradictory, or silent. The spec is frozen for the comment round, so none of these has been applied to it. They are input for `aab-01`. Each item lists what the code does today; the code marks the spot with `# SPEC-AMBIGUITY:` (`grep -rn SPEC-AMBIGUITY companion-spec/reference/python`).
+Writing `reference-python-1` turned up the places below where `aab-00` is ambiguous, contradictory, or silent (F-1..F-45); designing and reviewing `aab-01` added F-46..F-56. Each item lists what the code does today; the code marks the spot with `# SPEC-AMBIGUITY:` (`grep -rn SPEC-AMBIGUITY companion-spec/reference/python`).
 
 Where the spec is silent, the code sometimes rejects more than the spec requires. No generated vector depends on those extra rejections.
 
-Comments on any item: open an Issue with the "Companion spec (aab)" template and the item number, for example `[aab-00] F-3`.
+Items marked **resolved in aab-01** are fixed in [`agent-action-binding-draft-01.md`](../agent-action-binding-draft-01.md); Appendix A.2 of that draft lists each change. `aab-00` itself stays unchanged (git tag `aab-00`).
+
+Comments on any item: open an Issue with the "Companion spec (aab)" template and the item number, for example `[aab-01] F-47`.
 
 ## Design problems (fix before anything else)
 
 | # | Section | Problem | Code today | Proposed fix |
 | :--- | :--- | :--- | :--- | :--- |
-| F-1 | 7.2 step 8 vs 6.2 rule 1 | Approvals may complete in any order, but with an authenticator that increments its signature counter, two approvals presented in the opposite order to signing make the second one fail `E_WA_COUNTER`. The spec also does not say how the counter update and the pending-entry consumption are made atomic together. | ACT-018 is written so signing order equals presentation order | Drop the "must increase" rule for concurrent approvals, or only require the counter to differ from values already seen; define one atomic update for counter and pending entry |
-| F-2 | 8.4 steps 1 and 4 | "Step 1 of 7.3" plus "the remaining steps of 7.3" skips the credential check for device-key lease grants when read literally, because 7.3 step 1 is 7.2 steps 1–4. | Runs the credential check for both profiles | Spell out the order: 7.2 step 1, 7.2 step 4, then 7.2 steps 5–8 or 7.3 steps 2–8 |
-| F-3 | 8.2 | The lease grantee (field `0x05`) is never checked when a lease is used, so any agent in the session can use it. | Checks it when the agent id is known (`E_LEASE_SCOPE`) | Add an explicit grantee check with an error code |
-| F-4 | 8.3 | A constraint whose `tool` names a tool that is not in the lease silently applies to nothing, so a typo fails open. | Rejects at grant (`E_VALUE`) | Require `tool` to name a tool in the lease |
-| F-5 | 9.3, 9.4 | There is no format for a signed checkpoint: how record, COSE_Sign1 and time-stamp token are bundled, the COSE headers, the allowed algorithms for the log key, how the auditor gets the key, which algorithm governs the chain head. | 7.5 algorithms minus RS256, `alg` in the protected header, digest reference as payload | Define all of these, or adopt C2SP signed notes (OI-12) |
-| F-6 | 7.1, 8.4 | The evidence container does not say whether key `10` holds an action or a lease record; the verifier must know from context. | Endpoint decides | Add a container key for the object type, or state that the endpoint decides |
-| F-7 | 4.2, 4.3, 6.3 | Nothing requires a consumer to check that JSON fields inside a record are already in canonical form, although the forwarding rule depends on it. | Requires canonical form, rejects with `E_JSON` | Make it a MUST with an error code |
+| F-1 | 7.2 step 8 vs 6.2 rule 1 | Approvals may complete in any order, but with an authenticator that increments its signature counter, two approvals presented in the opposite order to signing make the second one fail `E_WA_COUNTER`. The spec also does not say how the counter update and the pending-entry consumption are made atomic together. | Snapshot rule and atomic step | **Resolved in aab-01**: counter compared with the snapshot at `not_before`, not reused since; one atomic step for counter and pending entry (7.2 step 8); ACT-018 signs in the opposite order to presentation |
+| F-2 | 8.4 steps 1 and 4 | "Step 1 of 7.3" plus "the remaining steps of 7.3" skips the credential check for device-key lease grants when read literally, because 7.3 step 1 is 7.2 steps 1–4. | Runs the credential check for both profiles | **Resolved in aab-01**: order written out in 8.4 and 7.3 |
+| F-3 | 8.2 | The lease grantee (field `0x05`) is never checked when a lease is used, so any agent in the session can use it. | Checks it at grant and on every call (`E_LEASE_SCOPE`) | **Resolved in aab-01**: 8.2 check 3 and 8.4 check 2, `E_LEASE_SCOPE` |
+| F-4 | 8.3 | A constraint whose `tool` names a tool that is not in the lease silently applies to nothing, so a typo fails open. | Rejects at grant (`E_VALUE`) | **Resolved in aab-01**: MUST, `E_VALUE` at grant (8.3) |
+| F-5 | 9.3, 9.4 | There is no format for a signed checkpoint: how record, COSE_Sign1 and time-stamp token are bundled, the COSE headers, the allowed algorithms for the log key, how the auditor gets the key, which algorithm governs the chain head. | Bundle and trust configuration as specified | **Resolved in aab-01**: bundle, COSE profile, log key algorithms with low S, one hash algorithm per log, auditor configuration (9.3, 9.6); C2SP alignment stays open (OI-12) |
+| F-6 | 7.1, 8.4 | The evidence container does not say whether key `10` holds an action or a lease record; the verifier must know from context. | Key `11` (`object`) | **Resolved in aab-01**: container key `11` `"action"` or `"lease"` (7.1) |
+| F-7 | 4.2, 4.3, 6.3 | Nothing requires a consumer to check that JSON fields inside a record are already in canonical form, although the forwarding rule depends on it. | Requires canonical form, rejects with `E_NOT_CANONICAL` | **Resolved in aab-01**: MUST, error `E_NOT_CANONICAL` (4.3) |
 
 ## Encoding (Section 4)
 
@@ -54,17 +56,17 @@ Comments on any item: open an Issue with the "Companion spec (aab)" template and
 | :--- | :--- | :--- | :--- |
 | F-23 | 7.2 step 5 | clientDataJSON that is valid JSON but not an object has no error. | `E_JSON` |
 | F-24 | 7.2 step 6.1 | "Consistent with the AT and ED flags" does not say whether AT may be set in an assertion. | Rejects AT (`E_WA_AUTHDATA`) |
-| F-25 | 7.3, 7.5 | RS256 is not allowed for device-key, but no step rejects it; whether the −9/−7 and −19/−8 equivalence is symmetric is not stated. | Rejects at step 5 (`E_COSE`); symmetric |
+| F-25 | 7.3, 7.5 | RS256 is not allowed for device-key, but no step rejects it; whether the −9/−7 and −19/−8 equivalence is symmetric is not stated. | **Resolved in aab-01** (7.3 step 5): rejects at step 5 (`E_COSE`); symmetric |
 
 ## Lease (Section 8)
 
 | # | Section | Problem | Code today |
 | :--- | :--- | :--- | :--- |
-| F-26 | 8.4 step 4 | Which approver authorization a lease grant needs is not defined. | Grantor must be authorized for every tool in the lease |
+| F-26 | 8.4 step 4 | Which approver authorization a lease grant needs is not defined. | **Resolved in aab-01** (8.4 step 4): grantor must be authorized for every tool in the lease |
 | F-27 | 8.3 | Required members per `op` are implicit; pointer and value types are unchecked; a non-array `constraints` has no error. | `value` required except for `absent`; valid RFC 6901 pointer; `E_VALUE` |
 | F-28 | 8.3 `beneath` | Whether the root itself holds (`src` beneath `src`) is not stated. | Holds, per the letter of the rule |
 | F-29 | 8.1 | Order of entry decoding vs the sort and duplicate check is not given; the "proper prefix" sentence is vacuous because entries are self-delimiting. | Decodes first |
-| F-30 | 8.4 check 4 | A lease whose start is far in the future is accepted at grant. | Accepted |
+| F-30 | 8.4 check 4 | A lease whose start is far in the future is accepted at grant. | **Resolved in aab-01**: `not_before` is the grant challenge time and the grant is verified within 330 000 ms of it (8.1, 8.4 check 5), `E_EXPIRED` |
 
 ## Log (Section 9)
 
@@ -72,13 +74,13 @@ Comments on any item: open an Issue with the "Companion spec (aab)" template and
 | :--- | :--- | :--- | :--- |
 | F-31 | 9.1 | No error for a decision on a non-type-2 record, or for breaking the sequence rule; field `0x0A` is optional although 8.2 says lease calls MUST be logged with it; decision 6 does not record which `E_*` occurred. | `E_VALUE`; `0x0A` required for types 4, 5 and decision 5 |
 | F-32 | 9.2 | Log writer append rejections have no codes. | `E_LOG_ID`, `E_LOG_INDEX` |
-| F-33 | 9.5 | No reference log id when there is no anchored checkpoint; step 1 per record or two passes; "report any errors" conflicts with Section 10's "report the first"; no codes for a checkpoint that does not decode or has another log's id; anchoring order is outside information; the "extends" condition cannot fail after step 3, and a later, smaller checkpoint consistent with the records is still a rollback (LOG-011). | Caller supplies the log id; per record; stops at the first error |
+| F-33 | 9.5 | No reference log id when there is no anchored checkpoint; step 1 per record or two passes; "report any errors" conflicts with Section 10's "report the first"; no codes for a checkpoint that does not decode or has another log's id; anchoring order is outside information; the "extends" condition cannot fail after step 3, and a later, smaller checkpoint consistent with the records is still a rollback (LOG-011). | Caller supplies the log id; per record; stops at the first error. **Partly resolved in aab-01**: a bundle or checkpoint that does not decode is `E_LOG_CHECKPOINT`, a checkpoint of another log is `E_LOG_ID`, and the reference log id comes from the auditor's configuration (9.5, 9.6). |
 
 ## Crypto path (found with the signature backend)
 
 | # | Section | Problem | Code today | Proposed fix |
 | :--- | :--- | :--- | :--- | :--- |
-| F-39 | 7.5 | ECDSA signatures are malleable: if `(r, s)` verifies, so does `(r, n - s)`. Low-S is not required, so one approval has two valid evidence byte strings. Replay is still stopped by pending entries, but anything that keys on the evidence bytes (deduplication, a log of evidence digests) sees two approvals. | Accepts high-S (unit test `test_high_s_is_accepted`) | State that evidence bytes are not unique identifiers; optionally require low-S for `device-key` and checkpoints, where the signer software is under the deployment's control (WebAuthn authenticators cannot be forced) |
+| F-39 | 7.5 | ECDSA signatures are malleable: if `(r, s)` verifies, so does `(r, n - s)`. Low-S is not required, so one approval has two valid evidence byte strings. Replay is still stopped by pending entries, but anything that keys on the evidence bytes (deduplication, a log of evidence digests) sees two approvals. | Accepts high-S (unit test `test_high_s_is_accepted`) | State that evidence bytes are not unique identifiers; optionally require low-S for `device-key` and checkpoints, where the signer software is under the deployment's control (WebAuthn authenticators cannot be forced). **Partly resolved in aab-01**: low S required for checkpoint signatures (9.3). |
 | F-40 | 7.5 | "ASN.1 DER `Ecdsa-Sig-Value`" does not say that a BER encoding (non-minimal integer, long-form length) MUST be rejected; WebAuthn libraries differ, so two verifiers can disagree on the same evidence. | Strict DER; BER rejected with `E_WA_SIGNATURE` | Say MUST reject non-DER; add a vector with a valid signature re-encoded in BER |
 | F-41 | 9.4 rule 2, 9.5 step 3.1 | There is no RFC 3161 validation profile: which TSA certificates are trusted and how the auditor learns them, which checks are required (ESSCertIDv2, `id-kp-timeStamping`, policy OID, nonce, `genTime` against the checkpoint `time`, accuracy), and what to do when the TSA certificate has expired. Without it LOG-017 cannot be given a fixture that two implementations would judge the same way (and `cryptography` cannot verify CMS SignedData, so a home-made token could not be cross-checked). | LOG-017 pending; any time-stamp token raises `Unsupported` after the checkpoint signature is verified | Define the profile and the trust configuration, or drop time-stamp tokens from `aab-00` and keep only anchoring (9.4 rule 1) |
 | F-42 | 6.2, 6.4 check 6 | The fingerprint is compared only when evidence is verified, so a proxy may ask a person to approve a call to a tool whose definition has already changed (E2E-002), and the person's approval is then wasted or, worse, taken as consent to the old definition. | The reference proxy also checks before issuing the challenge: `E_FP_CHANGED`, logged as decision 6 | Require the check before a pending entry is created, in addition to 6.4 check 6 |
@@ -95,3 +97,28 @@ Comments on any item: open an Issue with the "Companion spec (aab)" template and
 | F-36 | B.4 | WA-005 tests nothing unless the challenge contains `-` or `_` (the D.2 digest does); WA-028 and DK-006 need real signatures to be meaningful (both now carry the other format of a valid signature, so a lenient verifier accepts them and fails the vector). |
 | F-37 | B.1 | ENC-007 was printed as `{"a":1,"a":2}`, identical to ENC-005. Fixed in the spec as a typo (the escape `\u0061` had been lost). |
 | F-38 | Appendix D | "abab…ab" is ambiguous (it is `ab` × 32); the text calls the server identity a "record" although it is a sub-structure. |
+
+## Found while designing aab-01
+
+| # | Section | Problem | Resolution |
+| :--- | :--- | :--- | :--- |
+| F-46 | 7.1, 11 | Container `version` is a uint, `0` for `aab-00`, and Section 11 gives the frozen `aab-1` `version = 1`, which is also the number of draft `aab-01`. | **Resolved in aab-01**: `version` is the text label of the domain prefix (`"01"`; frozen `"1"`) |
+
+## Found in the review of aab-01
+
+Open items from the whole-branch review of `aab-01` (PR #25), and three behaviours carried over unchanged from `aab-00` that the review set aside as out of scope. Input for the next draft.
+
+| # | Section | Problem | Code today | Proposed fix |
+| :--- | :--- | :--- | :--- | :--- |
+| F-47 | 7.2 | The credential registry is still described as holding "the last seen signature counter", while step 8 needs a base counter and an acceptance history. | Base counter plus history (`Credential.counter`, `Credential.history`) | Describe the registry as in step 8 |
+| F-48 | 8.4 | Step 5 runs "steps 5–8 of Section 7.2", and the atomic step runs step 8 again. | Runs step 8 once, in the atomic step | Make step 5 read "steps 5–7" |
+| F-49 | 13.5 | The residual risk of the step 8 rule is not stated: a cloned authenticator that presents an unused value between `c_snap` and `c_max`, for a pending entry created before the higher value was accepted, is accepted, and with a global-counter authenticator it is never detected later. | As specified | State the trade-off in 13.5 |
+| F-50 | 10, A.2, 6.1 | The error table cites 5.1, 6.1 and 8.1 for `E_NOT_CANONICAL`, which do not mention it, while A.2 cites 4.3 and 10. The order between `E_NOT_CANONICAL` and 6.1's `E_JSON` for non-object arguments is not given. | `[1,2]` as arguments gives `E_NOT_CANONICAL` only if not canonical, else `E_JSON` | Align the references; state the order |
+| F-51 | B | The step 8 boundaries have unit tests but no vectors: the `t = max(not_before, now − 360 000)` clamp, `accepted_at = t`, and an `aab-00` container with uint `version` `0`. | Unit tests only | Add vectors |
+| F-52 | 7.2 step 8 | `now` is taken when a verification starts, but folding old history into the base uses the committing verification's `now`. If one verification runs longer than about 30 s while another commits, an entry it should see in `later` may already be in the base, so its result is stricter than an implementation that keeps the full history. | Folds at commit time | Require that folding never passes `now − 360 000` of any verification in progress, or fold relative to the oldest one |
+| F-53 | 9.3, 9.6, 13.6 | A log key's validity period is checked against the checkpoint's own `time`, which the signer chooses, so a retired or leaked log key can sign back-dated checkpoints. Anchoring (9.4) limits this but the spec does not say so. | As specified | Say in 13.6 that key validity is only as good as anchoring; consider checking against the anchoring time |
+| F-54 | 7.3, 9.3 | A COSE_Sign1 protected header with `crit` (label 2) is not addressed, for device-key evidence and for checkpoints. | Ignores `crit` | Reject `crit`, or list the labels a verifier must understand |
+| F-55 | 7.2 step 4, 8.4 step 4 | Action classes (`tool_classes`) are looked up by tool name, not by (server identity, name), so two servers with a tool of the same name share a class. | By name | Key the classification by server identity and name |
+| F-56 | 8.1, 8.4 | A lease with zero tool entries is accepted and skips the authorization check of step 4. | Accepted | Require at least one tool entry (`E_VALUE`) |
+
+Editorial, to fix with the next draft: the ACT-018 vector `description` keeps the `aab-00` wording; a few code comments still give pre-`aab-01` check numbers.

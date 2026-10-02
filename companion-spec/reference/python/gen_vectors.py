@@ -162,10 +162,13 @@ def sign_cose(key: str, prot_b: bytes, payload: bytes, fmt: str = "raw") -> byte
 
 
 def cred(cred_id=CRED_ID, approver="alice@example.internal", key=None, be=False, counter=5,
-         user_handle=USER_HANDLE, classes=("read", "write")):
-    return {"id_hex": cred_id.hex(), "approver": approver, "user_handle_hex": user_handle.hex(),
-            "be": be, "counter": counter, "classes": list(classes), "revoked": False,
-            "cose_key": key or KEY_ES256}
+         user_handle=USER_HANDLE, classes=("read", "write"), history=None):
+    c = {"id_hex": cred_id.hex(), "approver": approver, "user_handle_hex": user_handle.hex(),
+         "be": be, "counter": counter, "classes": list(classes), "revoked": False,
+         "cose_key": key or KEY_ES256}
+    if history is not None:
+        c["history"] = [list(h) for h in history]
+    return c
 
 
 def build_action(seq=7, session=SESSION, audience=PROXY, args=ARGS_D2, nb=NB, na=NA, approver=None,
@@ -195,7 +198,7 @@ def container(rec, object_type="action", profile="webauthn", key3=None, cred_id=
     ``signer`` signs ``authenticatorData || SHA-256(clientDataJSON)`` (or of
     ``sign_cdj`` when given) unless ``sig`` is passed explicitly."""
     key3 = key3 if key3 is not None else ref_bytes(object_type, rec)
-    m = {1: 0, 2: profile, 3: key3, 4: cred_id, 10: rec}
+    m = {1: records.WIRE_VERSION, 2: profile, 3: key3, 4: cred_id, 10: rec, 11: object_type}
     if profile == "webauthn":
         try:
             digest = records.decode_digest_ref(key3, "sha-256").digest
@@ -241,6 +244,7 @@ def base_context(pending=(), fps=None, creds=None, **kw):
                                                             user_handle=b"userbob"),
             cred(CRED_ID_DK, key=KEY_DEVICE)],
         "rp_id": RP_ID, "allowed_origins": [ORIGIN], "forbid_synced": False, "accept_rs256": False,
+        "session_agents": {SESSION.hex(): ["agent-1"]},
     }
     ctx.update(kw)
     return ctx
@@ -439,6 +443,9 @@ def gen_enc():
     sid = SID_D1_OBJ.encode()
     vec("ENC-030", "Server identity whose lp() values leave 2 bytes unused", "server-identity",
         inp={"identity_hex": (sid + b"\x00\x00").hex()}, catalogue=reject("E_LENGTH"))
+    rec31 = build_action(args_bytes=b'{"path": "src/main.py"}')
+    vec("ENC-031", "Action record whose arguments field is valid JSON but not canonical", "record",
+        inp={"record_type": "action", "record_hex": rec31.hex()}, catalogue=reject("E_NOT_CANONICAL"))
 
 
 # --- FP ------------------------------------------------------------------------
@@ -517,6 +524,9 @@ def gen_fp():
         inp={"kind": "url", "id": "https://mcp.example/?b=2&a=1"}, catalogue=reject("E_VALUE"))
     vec("FP-019", "url identity with scheme http", "server-identity",
         inp={"kind": "url", "id": "http://mcp.example/"}, catalogue=reject("E_VALUE"))
+    fp20 = records.encode_record([(0x01, SID_D1_OBJ.encode()), (0x02, b"read_file"), (0x05, b'{"type": "object"}')])
+    vec("FP-020", "Tool fingerprint record whose inputSchema field is not canonical", "record",
+        inp={"record_type": "tool-fp", "record_hex": fp20.hex()}, catalogue=reject("E_NOT_CANONICAL"))
 
 
 # --- ACT -----------------------------------------------------------------------
@@ -623,13 +633,13 @@ def gen_act():
         catalogue=reject("E_DIGEST_MISMATCH"))
     rec_a, rec_b = build_action(seq=8), build_action(seq=9)
     vec("ACT-018", "Two approvals pending at once; the later sequence is approved and executed first", "evidence",
-        inp={"presentations": [container(rec_b, ad=auth_data(count=6)).hex(),
-                               container(rec_a, ad=auth_data(count=7)).hex()]},
+        inp={"presentations": [container(rec_b, ad=auth_data(count=12)).hex(),
+                               container(rec_a, ad=auth_data(count=11)).hex()]},
         ctx=base_context(pending_for(rec_a, seq=8) + pending_for(rec_b, seq=9)), pending=NEEDS_CRYPTO,
         catalogue={"presentations": [ACCEPT, ACCEPT]}, extra=dict(KEYS_EXTRA, proxy_only=True),
-        note="The authenticator signs sequence 9 first (signCount 6), then sequence 8 (signCount 7). If the "
-             "two assertions were presented in the opposite order of signing, step 8 (counter) would reject "
-             "the second one although Section 6.2 allows any completion order (finding F-1).")
+        note="The authenticator signs sequence 8 first (signCount 11), then sequence 9 (signCount 12); "
+             "sequence 9 is presented first. Both are accepted: 11 is compared with the counter as of the "
+             "record's not_before (5), not with the 12 accepted since (Section 7.2 step 8, finding F-1).")
     vec("ACT-019", "Agent request with params._meta and an extra params member", "forwarding",
         inp={"record_hex": rec.hex(),
              "request_json_text": request_text(extra=',"_meta":{"progressToken":"p1"},"cursor":"x"')},
@@ -697,6 +707,16 @@ def gen_wa():
     ctx15 = base_context(pending_for(rec), creds=[cred(counter=0)])
     vec("WA-015", "Stored counter 0, received 0", "evidence", inp=ev(rec, ad=auth_data(count=0)), ctx=ctx15,
         pending=NEEDS_CRYPTO, extra=extra, catalogue=ACCEPT)
+    ctx30 = base_context(pending_for(rec), creds=[cred(history=[(NOW - 1000, 9)])])
+    vec("WA-030", "Counter equal to a value accepted after not_before", "evidence",
+        inp=ev(rec, ad=auth_data(count=9)), ctx=ctx30, pending=NEEDS_CRYPTO, extra=extra,
+        catalogue=reject("E_WA_COUNTER"),
+        note="Base counter 5; 9 was accepted after the record's not_before, so 9 is a value already used.")
+    ctx31 = base_context(pending_for(rec), creds=[cred(history=[(NB - 1000, 9)])])
+    vec("WA-031", "Counter not above the snapshot at not_before", "evidence",
+        inp=ev(rec, ad=auth_data(count=8)), ctx=ctx31, pending=NEEDS_CRYPTO, extra=extra,
+        catalogue=reject("E_WA_COUNTER"),
+        note="9 was accepted before the record's not_before, so the snapshot is 9 and 8 is not above it.")
     vec("WA-016", "Unknown credential id", "evidence", inp=ev(rec, cred_id=bytes.fromhex("ee" * 16)), ctx=ctx,
         catalogue=reject("E_CREDENTIAL"), note=pre % "4", extra=extra)
     good = cbor.decode(container(rec))
@@ -759,6 +779,12 @@ def gen_wa():
              "verifies), so a verifier that leniently accepts raw r || s would accept this vector.")
     vec("WA-029", "Container without key 10", "evidence", inp=ev(rec, drop=(10,)), ctx=ctx,
         catalogue=reject("E_CBOR"), note=pre % "1", extra=extra)
+    vec("WA-032", "Container with object \"lease\" presented to the action endpoint", "evidence",
+        inp=ev(rec, extra={11: "lease"}), ctx=ctx, catalogue=reject("E_CBOR"), note=pre % "1", extra=extra)
+    vec("WA-033", "Container without key 11", "evidence", inp=ev(rec, drop=(11,)), ctx=ctx,
+        catalogue=reject("E_CBOR"), note=pre % "1", extra=extra)
+    vec("WA-034", "Container with version \"00\"", "evidence", inp=ev(rec, extra={1: "00"}), ctx=ctx,
+        catalogue=reject("E_CBOR"), note=pre % "1", extra=extra)
 
 
 # --- DK --------------------------------------------------------------------------
@@ -806,12 +832,12 @@ def entry(tool, sid=SID_D1_OBJ, fp=None):
 
 
 def build_lease(tools=None, constraints=None, max_calls=10, max_arg_bytes=None, na=LEASE_NA, tools_bytes=None,
-                constraints_bytes=None, lease_id=LEASE_ID):
+                constraints_bytes=None, lease_id=LEASE_ID, grantor="alice@example.internal", nb=NB):
     tools = tools if tools is not None else [entry(TOOL_D1), entry(TOOL_WRITE)]
     if constraints is None:
         constraints = [{"tool": "write_file", "pointer": "/path", "op": "beneath", "value": "src"}]
-    return lease.build(PROXY, lease_id, SESSION, "alice@example.internal", "agent-1", tools, constraints,
-                       max_calls, NB, na, max_arg_bytes=max_arg_bytes, tools_bytes=tools_bytes,
+    return lease.build(PROXY, lease_id, SESSION, grantor, "agent-1", tools, constraints,
+                       max_calls, nb, na, max_arg_bytes=max_arg_bytes, tools_bytes=tools_bytes,
                        constraints_bytes=constraints_bytes)
 
 
@@ -895,6 +921,27 @@ def gen_ls():
           {"calls": [reject("E_LEASE_CONSTRAINT")] * 4})
     grant("LS-023", "beneath constraint with value ../src",
           build_lease(constraints=[{"pointer": "/path", "op": "beneath", "value": "../src"}]), reject("E_VALUE"))
+    lcall("LS-025", "Call by an agent that is not the grantee", [call(agent_id="agent-2")], reject("E_LEASE_SCOPE"),
+          note="The lease grantee is agent-1; agent-2 is in the same session (finding F-3).")
+    grant("LS-027", "Grantee is not an agent of the session", build_lease(), reject("E_LEASE_SCOPE"),
+          ctx_over={"session_agents": {SESSION.hex(): ["agent-2"]}})
+    grant("LS-026", "Constraint whose tool is not in the lease tool set",
+          build_lease(constraints=[{"tool": "delete_file", "pointer": "/path", "op": "beneath", "value": "src"}]),
+          reject("E_VALUE"))
+    grant("LS-028", "Grant verified later than not_before + 330 000 ms", build_lease(), reject("E_EXPIRED"),
+          ctx_over={"now": NB + 330_001},
+          note="not_before is the time the grant challenge was issued (Section 8.1); the grant must be verified "
+               "within 300 000 ms plus skew of it (8.4 check 5).")
+    grant("LS-029", "Lease whose not_before lies in the future", build_lease(nb=NOW + 30_001, na=NOW + 3_600_000),
+          reject("E_EXPIRED"), note="A pre-signed lease for a later start is not allowed (8.4 check 5, finding F-30).")
+    l24 = build_lease(grantor="bob@example.internal")
+    r24 = ref_bytes("lease", l24)
+    vec("LS-024", "Device-key grant signed with a credential that does not belong to the grantor", "lease-grant",
+        inp={"evidence_hex": container(l24, object_type="lease", profile="device-key", cred_id=CRED_ID_DK,
+                                       cose=cose_sign1(r24)).hex()},
+        ctx=base_context(), catalogue=reject("E_CREDENTIAL"), extra=KEYS_EXTRA,
+        note="The lease names bob as grantor; the device-key credential belongs to alice and its COSE signature "
+             "is valid. Section 8.4 step 4 runs the credential check for both profiles (finding F-2).")
 
 
 # --- LOG -------------------------------------------------------------------------
@@ -902,6 +949,9 @@ def gen_ls():
 LOG_ID = bytes.fromhex("1f" * 16)
 LOG_B = bytes.fromhex("2e" * 16)
 LOG_KEY = KEY_LOG
+LOG_KID = bytes.fromhex("10c0" * 8)
+LOG_TRUST = {"alg": "sha-256", "keys": [{"kid_hex": LOG_KID.hex(), "cose_key": LOG_KEY,
+                                         "not_before": NB - 86_400_000, "not_after": NB + 86_400_000}]}
 LOG_EXTRA = {"test_keys": {"log": TEST_KEYS["log"]}, "test_keys_note": KEYS_NOTE}
 
 
@@ -933,23 +983,36 @@ def renumber(recs_specs):
     return out
 
 
-def signed_checkpoint(cp: bytes, key="log", payload=None) -> dict:
-    """A checkpoint with a COSE_Sign1 by ``key`` (payload: the checkpoint digest reference)."""
+def sign_checkpoint(cp: bytes, key="log", prot=None, unprot=None, high_s=False) -> bytes:
+    """A COSE_Sign1 by ``key`` over the checkpoint digest reference (Section 9.3).
+
+    ES256 signatures are normalized to low-S; ``high_s`` replaces s by n - s
+    afterwards (a valid but non-conforming signature)."""
     ref = log.checkpoint_ref(cp).encode()
-    prot_b = cbor.encode({1: -7})
-    sig = sign_cose(key, prot_b, payload if payload is not None else ref)
-    cose = cbor.encode(cbor.Tag(18, [prot_b, {}, ref, sig]))
-    return {"record_hex": cp.hex(), "cose_sign1_hex": cose.hex()}
+    prot_b = cbor.encode({1: -7, 4: LOG_KID} if prot is None else prot)
+    sig = sign_cose(key, prot_b, ref)
+    r, s_ = sig[:32], int.from_bytes(sig[32:], "big")
+    if s_ > sigs.P256_N // 2:
+        s_ = sigs.P256_N - s_
+    if high_s:
+        s_ = sigs.P256_N - s_
+    return cbor.encode(cbor.Tag(18, [prot_b, unprot or {}, ref, r + s_.to_bytes(32, "big")]))
 
 
-def anchored(recs, size, log_id=LOG_ID, key="log", time=NB + 100_000):
-    hs = log.heads(log_id, recs[:size])
-    cp = log.build_checkpoint(log_id, size, records.DigestRef("sha-256", hs[size]), time)
-    return signed_checkpoint(cp, key)
+def signed_checkpoint(cp: bytes, key="log", timestamp=None, **kw) -> str:
+    """The hex of a signed checkpoint bundle."""
+    return log.encode_bundle(cp, sign_checkpoint(cp, key, **kw), timestamp).hex()
+
+
+def anchored(recs, size, log_id=LOG_ID, key="log", time=NB + 100_000, alg="sha-256", **kw):
+    hs = log.heads(log_id, recs[:size], alg)
+    cp = log.build_checkpoint(log_id, size, records.DigestRef(alg, hs[size]), time)
+    return signed_checkpoint(cp, key, **kw)
 
 
 def laudit(vid, desc, recs, cps, catalogue=None, pending=None, **kw):
-    inp = {"log_id_hex": LOG_ID.hex(), "records_hex": [r.hex() for r in recs], "anchored": cps, "log_key": LOG_KEY}
+    inp = {"log_id_hex": LOG_ID.hex(), "records_hex": [r.hex() for r in recs], "anchored": cps,
+           "log_trust": LOG_TRUST}
     inp.update(kw.pop("inp_extra", {}))
     extra = dict(LOG_EXTRA, intermediate={"heads_hex": [h.hex() for h in log.heads(LOG_ID, recs)]})
     vec(vid, desc, "log-audit", inp=inp, catalogue=catalogue, pending=pending, extra=extra, **kw)
@@ -1013,7 +1076,7 @@ def gen_log():
            log.build(LOG_ID, 4, NB + 4000, SESSION, 3, 2, decision=1, action=a3)]
     laudit("LOG-016", "Concurrent actions: type-1 for sequence 3 before type-1 for sequence 2", r16,
            [anchored(r16, 5)], pending=C, catalogue={"result": "accept", "verified_up_to": 4})
-    cp17 = dict(anchored(r, 5), timestamp_token_hex="3000")
+    cp17 = anchored(r, 5, timestamp=b"\x30\x00")
     laudit("LOG-017", "Anchored checkpoint with an RFC 3161 token that does not verify", r[:5], [cp17],
            pending="needs an RFC 3161 verifier and a TSA test fixture (not built; see finding F-41).",
            note="Expected: E_LOG_CHECKPOINT. The checkpoint signature is real and valid; the token is a "
@@ -1023,10 +1086,36 @@ def gen_log():
         "action", build_action(seq=1)))] + r[4:5])
     laudit("LOG-018", "Forked history with its own time-stamped checkpoint; auditor holds the original's", fork,
            [anchored(r, 5)], pending=C, catalogue=reject("E_LOG_CHAIN"),
-           inp_extra={"writer_only_checkpoints": [dict(anchored(fork, 5), timestamp_token_hex="3000")]},
+           inp_extra={"writer_only_checkpoints": [anchored(fork, 5, timestamp=b"\x30\x00")]},
            note="The writer's own checkpoint of the fork is validly signed and carries a (placeholder) time-stamp "
                 "token; it is not anchored, so the auditor ignores it.")
 
+    laudit("LOG-019", "Checkpoint COSE_Sign1 with alg in the unprotected header only", r[:5],
+           [anchored(r, 5, prot={4: LOG_KID}, unprot={1: -7})], catalogue=reject("E_LOG_CHECKPOINT"),
+           note="The unprotected header must be empty (Section 9.3); checked before the signature.")
+    laudit("LOG-020", "Checkpoint kid that is not a key of this log", r[:5],
+           [anchored(r, 5, prot={1: -7, 4: bytes.fromhex("ff" * 16)})], catalogue=reject("E_LOG_CHECKPOINT"),
+           note="The auditor's trust configuration has one key, kid 10c0...; checked before the signature.")
+    laudit("LOG-021", "Checkpoint ES256 signature with high S", r[:5], [anchored(r, 5, high_s=True)],
+           catalogue=reject("E_LOG_CHECKPOINT"),
+           note="The signature (r, n - s) is mathematically valid; checkpoints require low S (Section 9.3), "
+                "which is checked before the signature arithmetic.")
+    laudit("LOG-022", "Checkpoint head computed with sha-384 in a sha-256 log", r[:5], [anchored(r, 5, alg="sha-384")],
+           catalogue=reject("E_ALG_MISMATCH"), note="One hash algorithm per log (Section 9.6).")
+    rsa_trust = {"alg": "sha-256", "keys": [{"kid_hex": LOG_KID.hex(), "not_before": NB - 86_400_000,
+                                             "not_after": NB + 86_400_000,
+                                             "cose_key": {"kty": 3, "alg": -257, "n_hex": "c0" * 256,
+                                                          "e_hex": "010001"}}]}
+    laudit("LOG-023", "Log key with RS256", r[:5], [anchored(r, 5, prot={1: -257, 4: LOG_KID})],
+           catalogue=reject("E_LOG_CHECKPOINT"), inp_extra={"log_trust": rsa_trust},
+           note="RS256 is not allowed for log keys (Section 9.3); rejected before the signature.")
+    laudit("LOG-025", "Checkpoint alg that is not an integer", r[:5], [anchored(r, 5, prot={1: [-7], 4: LOG_KID})],
+           catalogue=reject("E_LOG_CHECKPOINT"), note="Protected header alg is an array; rejected before the signature.")
+    good = log.decode_bundle(bytes.fromhex(anchored(r, 5)))
+    unsorted = (b"\xa3" + cbor.encode(2) + cbor.encode(good.checkpoint) + cbor.encode(1) + cbor.encode("01")
+                + cbor.encode(3) + cbor.encode(good.cose_sign1))
+    laudit("LOG-024", "Checkpoint bundle with map keys out of deterministic order", r[:5], [unsorted.hex()],
+           catalogue=reject("E_LOG_CHECKPOINT"), note="Keys 2, 1, 3 instead of 1, 2, 3 (RFC 8949 4.2.1).")
 
 # --- E2E -------------------------------------------------------------------------
 
@@ -1089,11 +1178,11 @@ class Scenario:
 
     def checkpoint_and_audit(self, now):
         cp = self.px.checkpoint(now)
-        self.add(op="checkpoint", now=now, cose_sign1_hex=signed_checkpoint(cp)["cose_sign1_hex"])
+        self.add(op="checkpoint", now=now, cose_sign1_hex=sign_checkpoint(cp).hex())
         self.add(op="audit")
 
     def input(self):
-        return {"server": SID_D1, "log_id_hex": LOG_ID.hex(), "log_key": LOG_KEY, "steps": self.steps}
+        return {"server": SID_D1, "log_id_hex": LOG_ID.hex(), "log_trust": LOG_TRUST, "steps": self.steps}
 
 
 def e2e_context():
