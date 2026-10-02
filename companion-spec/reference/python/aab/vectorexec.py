@@ -70,7 +70,7 @@ def build_state(ctx: dict) -> action.VerifierState:
         proxy_id=ctx.get("proxy_id", ""), now=ctx.get("now", 0),
         open_sessions=[bytes.fromhex(s) for s in ctx.get("open_sessions", [])],
         request_session=_hex(ctx.get("request_session")), pending=pending, current_fps=fps,
-        cfg=_cfg(ctx))
+        cfg=_cfg(ctx), session_agents={bytes.fromhex(k): v for k, v in ctx.get("session_agents", {}).items()})
 
 
 def build_approval_context(ctx: dict) -> evidence.ApprovalContext:
@@ -243,7 +243,7 @@ def h_lease_call(v, inp, ctx):
                 rec, usage, call["now"], bytes.fromhex(call["session_hex"]), _server(call["server"]),
                 call["name"], records.parse_ref_text(fp) if fp else None,
                 jsonstrict.parse(call["arguments_json_text"].encode("utf-8")),
-                budget_mode=call.get("budget_mode", "reject"), agent_id=call.get("agent_id"))
+                budget_mode=call.get("budget_mode", "reject"), agent_id=call["agent_id"])
             return {"result": res}
         outs.append(_run(one))
     last = outs[-1]

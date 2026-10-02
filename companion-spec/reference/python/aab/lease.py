@@ -291,10 +291,12 @@ class GrantState:
 
 
 def check_lease_record(rec: dict, ctx: evidence.ApprovalContext, grants: GrantState) -> None:
-    """Lease record checks 1-8 of Section 8.4 step 3."""
+    """Lease record checks 1-9 of Section 8.4 step 3."""
     st = ctx.state
     if rec["session"] not in st.open_sessions or rec["session"] != st.request_session:
         raise AabError(E_SESSION, "lease session not open or not the grant's session")
+    if rec["grantee"] not in st.session_agents.get(rec["session"], set()):
+        raise AabError(E_LEASE_SCOPE, "grantee %r is not an agent of the session" % rec["grantee"])
     if rec["audience"] != st.proxy_id:
         raise AabError(E_AUDIENCE, "audience %r" % rec["audience"])
     if not window_ok(rec["not_before"], rec["not_after"], MAX_WINDOW_MS):
@@ -353,17 +355,14 @@ class LeaseUsage:
 
 
 def enforce_call(rec: dict, usage: LeaseUsage, now: int, session: bytes, server: ServerIdentity,
-                 name: str, current_fp: Optional[DigestRef], arguments, budget_mode: str = "reject",
-                 agent_id: Optional[str] = None) -> str:
+                 name: str, current_fp: Optional[DigestRef], arguments, budget_mode: str = "reject", *,
+                 agent_id: str) -> str:
     """The checks of Section 8.2 rule 4. Returns ``"accept"`` or ``"escalate"``."""
     if usage.revoked:
         raise AabError(E_LEASE_REVOKED, "lease revoked")
     if session != rec["session"]:
         raise AabError(E_SESSION, "call session is not the lease session")
-    # SPEC-AMBIGUITY: 8.2: the grantee (field 0x05) is never checked at
-    # enforcement. We check it when the caller supplies the agent id, with
-    # E_LEASE_SCOPE, right after the session check.
-    if agent_id is not None and agent_id != rec["grantee"]:
+    if agent_id != rec["grantee"]:
         raise AabError(E_LEASE_SCOPE, "agent is not the grantee")
     if now < rec["not_before"] - SKEW_MS or now > rec["not_after"] + SKEW_MS:
         raise AabError(E_EXPIRED, "outside the lease window")

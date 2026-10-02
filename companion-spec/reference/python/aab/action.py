@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 from . import encoding, jsonstrict
 from .encoding import i64, u64
@@ -114,7 +114,7 @@ class VerifierState:
     def __init__(self, proxy_id: str, now: int, open_sessions=(), request_session: Optional[bytes] = None,
                  pending: Optional[Dict[Tuple[bytes, int], bytes]] = None,
                  current_fps: Optional[Dict[Tuple[bytes, str], DigestRef]] = None,
-                 cfg: Config = DEFAULT_CONFIG):
+                 cfg: Config = DEFAULT_CONFIG, session_agents: Optional[Dict[bytes, Set[str]]] = None):
         self.proxy_id = proxy_id
         self.now = now
         self.open_sessions = set(open_sessions)
@@ -122,6 +122,7 @@ class VerifierState:
         self.pending = dict(pending or {})
         self.current_fps = dict(current_fps or {})
         self.cfg = cfg
+        self.session_agents = {k: set(v) for k, v in (session_agents or {}).items()}
 
     def consume(self, session: bytes, sequence: int, ref_bytes: bytes) -> None:
         """Atomic compare-and-delete of a pending entry (Section 6.4, last paragraph)."""

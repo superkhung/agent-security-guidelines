@@ -244,6 +244,7 @@ def base_context(pending=(), fps=None, creds=None, **kw):
                                                             user_handle=b"userbob"),
             cred(CRED_ID_DK, key=KEY_DEVICE)],
         "rp_id": RP_ID, "allowed_origins": [ORIGIN], "forbid_synced": False, "accept_rs256": False,
+        "session_agents": {SESSION.hex(): ["agent-1"]},
     }
     ctx.update(kw)
     return ctx
@@ -920,6 +921,10 @@ def gen_ls():
           {"calls": [reject("E_LEASE_CONSTRAINT")] * 4})
     grant("LS-023", "beneath constraint with value ../src",
           build_lease(constraints=[{"pointer": "/path", "op": "beneath", "value": "../src"}]), reject("E_VALUE"))
+    lcall("LS-025", "Call by an agent that is not the grantee", [call(agent_id="agent-2")], reject("E_LEASE_SCOPE"),
+          note="The lease grantee is agent-1; agent-2 is in the same session (finding F-3).")
+    grant("LS-027", "Grantee is not an agent of the session", build_lease(), reject("E_LEASE_SCOPE"),
+          ctx_over={"session_agents": {SESSION.hex(): ["agent-2"]}})
     l24 = build_lease(grantor="bob@example.internal")
     r24 = ref_bytes("lease", l24)
     vec("LS-024", "Device-key grant signed with a credential that does not belong to the grantor", "lease-grant",

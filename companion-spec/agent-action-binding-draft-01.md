@@ -132,7 +132,7 @@ The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RE
 
 - **Tool definition.** One element of the `tools` array in a `tools/list` result, as delivered to the model.
 - **Server identity.** A stable identifier of the tool server that does not depend on the name the server gives itself (Section 5.2).
-- **Session.** A proxy-issued context tied to one user and one start time, identified by a 16-byte random **session id**. It is not an MCP protocol session.
+- **Session.** A proxy-issued context tied to one user and one start time, identified by a 16-byte random **session id**. It is not an MCP protocol session. A session MAY have several agents (for example a main agent and its sub-agents). The proxy MUST know the authenticated identity (**agent id**) of the agent that makes each call, and the set of agents of each session.
 - **Action.** One `tools/call` request that the proxy evaluates.
 - **Pending entry.** The proxy's record that it has issued a challenge for one action and not yet accepted evidence for it (Section 6.2).
 - **Anchored checkpoint.** A signed checkpoint that has been delivered to a party independent of the log writer (Section 9.4).
@@ -523,13 +523,14 @@ A lease is granted by approval evidence (Section 7) over the lease digest, verif
 | :--- | :--- | :--- |
 | 1 | The lease has been revoked | `E_LEASE_REVOKED` |
 | 2 | The call's session is not the lease's session | `E_SESSION` |
-| 3 | The current time is outside `[not_before, not_after]`, with the skew allowance of Section 6.4 | `E_EXPIRED` |
-| 4 | The (server identity, name) of the tool is not in the lease tool set | `E_LEASE_SCOPE` |
-| 5 | The tool's current fingerprint differs from the entry's | `E_FP_CHANGED` |
-| 6 | A constraint (Section 8.3) is violated | `E_LEASE_CONSTRAINT` |
-| 7 | The call would exceed `max calls` or `max argument bytes` | `E_LEASE_BUDGET`, or escalation to per-action approval, according to policy |
+| 3 | The agent making the call is not the grantee (field `0x05`) | `E_LEASE_SCOPE` |
+| 4 | The current time is outside `[not_before, not_after]`, with the skew allowance of Section 6.4 | `E_EXPIRED` |
+| 5 | The (server identity, name) of the tool is not in the lease tool set | `E_LEASE_SCOPE` |
+| 6 | The tool's current fingerprint differs from the entry's | `E_FP_CHANGED` |
+| 7 | A constraint (Section 8.3) is violated | `E_LEASE_CONSTRAINT` |
+| 8 | The call would exceed `max calls` or `max argument bytes` | `E_LEASE_BUDGET`, or escalation to per-action approval, according to policy |
 
-A call that fails check 4 or 5 is not covered by the lease. The error is logged, and the proxy MAY then evaluate the call under per-action policy as a new action.
+A call that fails check 3, 5 or 6 is not covered by the lease. The error is logged, and the proxy MAY then evaluate the call under per-action policy as a new action.
 
 ### 8.3. Argument constraints
 
@@ -569,13 +570,14 @@ The grant evidence is the container of Section 7.1, with key `11` `"lease"`, key
    | # | Condition | Error |
    | :--- | :--- | :--- |
    | 1 | The session id is not an open session issued by this proxy, or is not the session in which the grant is made | `E_SESSION` |
-   | 2 | The audience is not this verifier | `E_AUDIENCE` |
-   | 3 | `not_after < not_before`, or `not_after − not_before` exceeds 28 800 000 ms | `E_EXPIRED` |
-   | 4 | The current time is later than `not_after + 30 000 ms` | `E_EXPIRED` |
-   | 5 | The lease id has been granted before (including leases since revoked or exhausted) | `E_REPLAY` |
-   | 6 | An entry's fingerprint differs from the tool's current fingerprint | `E_FP_CHANGED` |
-   | 7 | An entry is a tool classified as irreversible or privileged, or a shell tool (guideline ACT-01, ACT-04). The classification comes from the organization's policy, not from annotations | `E_LEASE_SCOPE` |
-   | 8 | A constraint element is malformed (Section 8.3) | `E_VALUE` |
+   | 2 | The grantee (field `0x05`) is not an agent of that session (Section 2.4) | `E_LEASE_SCOPE` |
+   | 3 | The audience is not this verifier | `E_AUDIENCE` |
+   | 4 | `not_after < not_before`, or `not_after − not_before` exceeds 28 800 000 ms | `E_EXPIRED` |
+   | 5 | The current time is later than `not_after + 30 000 ms` | `E_EXPIRED` |
+   | 6 | The lease id has been granted before (including leases since revoked or exhausted) | `E_REPLAY` |
+   | 7 | An entry's fingerprint differs from the tool's current fingerprint | `E_FP_CHANGED` |
+   | 8 | An entry is a tool classified as irreversible or privileged, or a shell tool (guideline ACT-01, ACT-04). The classification comes from the organization's policy, not from annotations | `E_LEASE_SCOPE` |
+   | 9 | A constraint element is malformed (Section 8.3) | `E_VALUE` |
 
 4. **Credential.** Step 4 of Section 7.2, for both profiles: the credential MUST be known and not revoked, MUST belong to the grantor in field `0x04`, and its approver MUST be authorized for the action class of every tool in the lease tool set. Else `E_CREDENTIAL`.
 5. **Signature.** For `webauthn`, steps 5–8 of Section 7.2. For `device-key`, steps 2–8 of Section 7.3.
@@ -870,6 +872,7 @@ The findings are listed in `reference/SPEC-FINDINGS.md`; issues are in the repos
 | :--- | :--- | :--- |
 | F-1 | Signature counter compared with the snapshot at the record's `not_before`, within one atomic step with the pending entry; `not_before` is the pending entry's creation time | 6.1, 6.2, 6.4, 7.2, 8.4, 13.4, 13.5 |
 | F-2 | Grant verification order written out step by step; the credential check runs for both profiles | 7.3, 8.4 |
+| F-3 | Lease grantee checked at grant (an agent of the session) and on every call; a session may have several agents | 2.4, 8.2, 8.4 |
 | F-6 | Evidence container key `11` names the object type of key `10`; an endpoint rejects the other type | 7.1, 7.2, 8.4 |
 | F-25 | Device-key: RS256 rejected at step 5; algorithm equivalences hold in both directions | 7.3 |
 | F-26 | A lease grant needs the grantor to be authorized for every tool in the lease | 8.4 |
@@ -1051,6 +1054,8 @@ Vectors in this group include a test authenticator key pair so that runners can 
 | LS-022 | `beneath` constraint `src`, arguments `./src/a`, `src//a`, `/etc/passwd`, `src\..\x` | each rejected `E_LEASE_CONSTRAINT` |
 | LS-023 | `beneath` constraint with `value` `../src` | reject at grant `E_VALUE` |
 | LS-024 | `device-key` grant whose credential does not belong to the grantor | reject at grant `E_CREDENTIAL` |
+| LS-025 | Call by an agent of the session that is not the grantee | reject `E_LEASE_SCOPE` |
+| LS-027 | Grant whose grantee is not an agent of the session | reject at grant `E_LEASE_SCOPE` |
 
 ### B.7. LOG · Log chain
 

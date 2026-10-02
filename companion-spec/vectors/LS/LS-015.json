@@ -124,6 +124,11 @@
     ],
     "forbid_synced": false,
     "accept_rs256": false,
+    "session_agents": {
+      "000102030405060708090a0b0c0d0e0f": [
+        "agent-1"
+      ]
+    },
     "granted_leases": [
       "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
     ]
