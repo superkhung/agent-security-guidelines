@@ -4,7 +4,7 @@
 
 Việc có mặt trong bảng không phải là khuyến nghị sản phẩm, và bảng không xếp hạng. Kiểm lại trạng thái dự án, giấy phép và phiên bản trước khi dùng.
 
-**Cập nhật lần cuối:** 23/09/2026 · khớp với guideline 0.1.0
+**Cập nhật lần cuối:** 03/10/2026 · khớp với guideline 0.1.0, trừ Snyk Agent Scan (xem dòng của nó)
 
 Sau bảng công cụ là phần [Công cụ đóng boundary nào](#công-cụ-đóng-boundary-nào): mỗi công cụ chặn hay chỉ phát hiện, ở tầng nào, và đường đi nào nằm ngoài nó.
 
@@ -14,12 +14,12 @@ Quy ước độ trưởng thành: **Ổn định** (dùng rộng rãi, API ít 
 
 ## Bảng công cụ
 
-### Quét cấu hình và mô tả tool · SC-01, SC-04, SC-05
+### Quét cấu hình và mô tả tool · SC-01, SC-04
 
 | Công cụ | Nền tảng | Độ trưởng thành | Ghi chú | Nguồn |
 | :--- | :--- | :--- | :--- | :--- |
 | Cisco `mcp-scanner` | Đa nền tảng | Dùng được | Apache 2.0; quét tĩnh không cần key, các bộ phân tích dùng LLM là tùy chọn | [github.com/cisco-ai-defense/mcp-scanner](https://github.com/cisco-ai-defense/mcp-scanner) |
-| Snyk Agent Scan (trước là Invariant `mcp-scan`) | Đa nền tảng | Dùng được | Cần tài khoản Snyk và `SNYK_TOKEN`; có tool pinning | [github.com/snyk/agent-scan](https://github.com/snyk/agent-scan) |
+| Snyk Agent Scan (trước là Invariant `mcp-scan`) | Đa nền tảng | Dùng được | Cần tài khoản Snyk và `SNYK_TOKEN`; phân tích chạy trên API của Snyk. Tính năng tool pinning đã bị gỡ từ v0.4.6 (03/2026), nên không còn dùng được cho SC-05; guideline 0.1.0 (SC-05, bảng 5.1) còn ghi là có. Lệnh `guard` cài hook cho Claude Code, Cursor, Codex và Copilot, gửi từng sự kiện tới dịch vụ Agent Guard của Snyk; phần quyết định ở phía Snyk, không mở mã nguồn | [github.com/snyk/agent-scan](https://github.com/snyk/agent-scan) |
 
 ### Gateway MCP · SC-02, ACT-02, OBS-01, NET-05
 
@@ -37,7 +37,7 @@ Quy ước độ trưởng thành: **Ổn định** (dùng rộng rãi, API ít 
 
 | Công cụ | Nền tảng | Độ trưởng thành | Ghi chú | Nguồn |
 | :--- | :--- | :--- | :--- | :--- |
-| Anthropic Sandbox Runtime (`srt`) | macOS, Linux; Windows đang phát triển | Thử nghiệm | Bọc được cả agent, MCP server local và lệnh tùy ý; có proxy lọc mạng. Mặc định cho đọc ở mọi nơi trừ đường dẫn bị cấm | [github.com/anthropics/sandbox-runtime](https://github.com/anthropics/sandbox-runtime) |
+| Anthropic Sandbox Runtime (`srt`) | macOS, Linux; Windows alpha | Thử nghiệm | Bọc được cả agent, MCP server local và lệnh tùy ý; có proxy lọc mạng, và có thể giải mã HTTPS để lọc từng request (`network.tlsTerminate`, experimental). Mặc định cho đọc ở mọi nơi trừ đường dẫn bị cấm. Trên Windows, tiến trình chạy dưới tài khoản `srt-sandbox` riêng, có rào egress bằng Windows Filtering Platform; cần chạy `windows-install` một lần với quyền admin | [github.com/anthropics/sandbox-runtime](https://github.com/anthropics/sandbox-runtime) |
 | bubblewrap | Linux | Ổn định | Nền của nhiều sandbox khác | [github.com/containers/bubblewrap](https://github.com/containers/bubblewrap) |
 | Landlock (kernel), `landrun` | Linux ≥ 5.13 (mạng TCP từ 6.7) | Ổn định (kernel) | Không cần root | [github.com/Zouuup/landrun](https://github.com/Zouuup/landrun) |
 | `sandbox-exec` | macOS | Ổn định nhưng deprecated | Apple vẫn dùng nội bộ; chưa có thay thế công khai tương đương | Có sẵn trong macOS |
@@ -52,7 +52,7 @@ Quy ước độ trưởng thành: **Ổn định** (dùng rộng rãi, API ít 
 | Firecracker | Linux | Ổn định | microVM | [github.com/firecracker-microvm/firecracker](https://github.com/firecracker-microvm/firecracker) |
 | E2B | Linux/cloud | Dùng được | Nền tảng sandbox cho agent dựng trên Firecracker | [github.com/e2b-dev/E2B](https://github.com/e2b-dev/E2B) |
 | Windows Sandbox | Windows 10/11 Pro, Enterprise, Education | Ổn định | Có sẵn trong OS, không phải mã nguồn mở. VM dùng một lần trên Hyper-V, cấu hình bằng file `.wsb` (thư mục map, `ReadOnly`, tắt mạng, tắt clipboard). Mạng chỉ bật hoặc tắt, không có allowlist, nên không thay được NET-01 | [learn.microsoft.com/…/windows-sandbox](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/) |
-| `kubernetes-sigs/agent-sandbox` | Kubernetes | Dùng được | CRD `Sandbox`, giao cô lập cho gVisor/Kata qua RuntimeClass | [github.com/kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) |
+| `kubernetes-sigs/agent-sandbox` | Kubernetes | Dùng được | CRD `Sandbox`, giao cô lập cho gVisor/Kata qua RuntimeClass. Từ v1.0.0 (08/2026) API là `v1beta1`; không nâng cấp thẳng từ bản cũ hơn v0.5 | [github.com/kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) |
 
 ### Egress · NET-01, NET-02, NET-03
 
@@ -87,7 +87,7 @@ Quy ước độ trưởng thành: **Ổn định** (dùng rộng rãi, API ít 
 | :--- | :--- | :--- | :--- | :--- |
 | LiteLLM | Đa nền tảng | Dùng được | Khóa ảo, quota | [github.com/BerriAI/litellm](https://github.com/BerriAI/litellm) |
 | Bifrost | Đa nền tảng | Dùng được | Khóa ảo, quota | [github.com/maximhq/bifrost](https://github.com/maximhq/bifrost) |
-| Portkey gateway | Đa nền tảng | Dùng được | Khóa ảo, quota | [github.com/Portkey-AI/gateway](https://github.com/Portkey-AI/gateway) |
+| Portkey gateway | Đa nền tảng | Dùng được | Khóa ảo, quota. Thuộc Palo Alto Networks từ 05/2026; repo không có commit nào từ 25/05/2026; lỗ hổng SSRF [#1718](https://github.com/Portkey-AI/gateway/issues/1718) còn mở, chưa vá. Nếu tới 01/2027 vẫn vậy thì đủ tiêu chí gỡ | [github.com/Portkey-AI/gateway](https://github.com/Portkey-AI/gateway) |
 
 ### Lọc prompt injection (lớp xác suất) · bổ trợ D5
 
@@ -115,7 +115,7 @@ Không phải ranh giới kiểm soát (guideline, Mục 1.5).
 
 | Công cụ | Nền tảng | Độ trưởng thành | Ghi chú | Nguồn |
 | :--- | :--- | :--- | :--- | :--- |
-| OpenTelemetry (GenAI semantic conventions) | Đa nền tảng | Dùng được | Semantic conventions cho GenAI còn đang hoàn thiện | [github.com/open-telemetry/semantic-conventions](https://github.com/open-telemetry/semantic-conventions) |
+| OpenTelemetry (GenAI semantic conventions) | Đa nền tảng | OpenTelemetry: Ổn định; conventions GenAI và MCP: Thử nghiệm | Conventions cho GenAI và MCP đã tách sang repo riêng từ semantic-conventions v1.42.0, trạng thái Development, chưa có bản phát hành. Tham số và kết quả của tool call chỉ được ghi khi bật (Opt-In) | [github.com/open-telemetry/semantic-conventions-genai](https://github.com/open-telemetry/semantic-conventions-genai) |
 | Falco | Linux | Ổn định | Tín hiệu cấp kernel | [github.com/falcosecurity/falco](https://github.com/falcosecurity/falco) |
 | Tetragon | Linux | Ổn định | Tín hiệu cấp kernel dựa trên eBPF, chặn được tại chỗ | [github.com/cilium/tetragon](https://github.com/cilium/tetragon) |
 
@@ -141,7 +141,7 @@ Không phải ranh giới kiểm soát (guideline, Mục 1.5).
 
 | Công cụ | Nền tảng | Độ trưởng thành | Ghi chú | Nguồn |
 | :--- | :--- | :--- | :--- | :--- |
-| Biscuit | Đa nền tảng | Dùng được | Token cho phép thu hẹp offline | [github.com/eclipse-biscuit/biscuit](https://github.com/eclipse-biscuit/biscuit) |
+| Biscuit | Đa nền tảng | Dùng được | Token cho phép thu hẹp offline. Độ trưởng thành tùy bản cài đặt: bản Rust là bản tham chiếu (6.0.0, 07/2025), bản Go không có bản phát hành nào từ 06/2023. Kiểm bản cho ngôn ngữ của bạn. Đặc tả ở [github.com/eclipse-biscuit/biscuit](https://github.com/eclipse-biscuit/biscuit) | [github.com/eclipse-biscuit/biscuit-rust](https://github.com/eclipse-biscuit/biscuit-rust) |
 
 ### FIDO2 / WebAuthn · ACT-06
 
@@ -167,15 +167,14 @@ Quy ước:
 - **Lúc.** *Trước khi chạy*: lúc duyệt, lúc build, trong CI. *Lúc chạy*: trên đường đi của từng hành động. *Sau sự việc*: khi điều tra.
 - **Tầng.** *OS* (filesystem, tiến trình), *Mạng*, *Credential*, *MCP* (tool call có ngữ nghĩa), *LLM* (lời gọi model), *Log*, *Dữ liệu*.
 
-Đây là đánh giá tại 09/2026, dựa trên tài liệu công khai của từng công cụ và trên guideline, không phải kết quả kiểm thử từng công cụ. Công cụ thay đổi nhanh. Nếu một dòng sai, hoặc một giới hạn đã được công cụ khắc phục, đó là góp ý có giá trị: sửa dòng đó qua Pull Request và ghi nguồn.
+Đây là đánh giá tại 10/2026, dựa trên tài liệu công khai của từng công cụ và trên guideline, không phải kết quả kiểm thử từng công cụ. Công cụ thay đổi nhanh. Nếu một dòng sai, hoặc một giới hạn đã được công cụ khắc phục, đó là góp ý có giá trị: sửa dòng đó qua Pull Request và ghi nguồn.
 
 | Công cụ | Control | Kiểu | Lúc | Tầng | Không bao được |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | Cisco `mcp-scanner`, Snyk Agent Scan | SC-01, SC-04 | Phát hiện | Trước khi chạy | MCP | Không ngăn tool chạy; chỉ thấy mô tả và cấu hình, không thấy code server làm gì khác mô tả; có false negative (SC-04) |
-| Snyk Agent Scan (tool pinning) | SC-05 | Phát hiện | Trước khi chạy, và khi quét lại | MCP | Dùng ở chế độ quét thì chỉ phát hiện thay đổi khi được chạy lại, không chặn `tools/list` mà mô hình đã nhận; kiểm tra bản đang dùng có chế độ chạy trên đường đi hay không trước khi coi nó là điểm so sánh của SC-05 |
-| Gateway MCP (agentgateway, ToolHive, Docker MCP Gateway, Bifrost, ContextForge, Obot, Microsoft MCP Gateway) | SC-02, ACT-02, OBS-01, NET-05 | Chặn | Lúc chạy | MCP | Không thấy tool built-in của client (Bash, Edit, WebFetch) và tiến trình con (Nguyên lý 2); phần lớn chưa pin đủ các trường của fingerprint (SC-05); không ràng buộc phê duyệt với tham số (ACT-06) |
+| Gateway MCP (agentgateway, ToolHive, Docker MCP Gateway, Bifrost, ContextForge, Obot, Microsoft MCP Gateway) | SC-02, ACT-02, OBS-01, NET-05 | Chặn | Lúc chạy | MCP | Không thấy tool built-in của client (Bash, Edit, WebFetch) và tiến trình con (Nguyên lý 2); không gateway nào trong danh sách pin định nghĩa tool để phát hiện rug pull (SC-05), dù agentgateway có hook `mcpGuardrails` để tự viết phần này; không ràng buộc phê duyệt với tham số (ACT-06) |
 | ToolHive, Docker MCP Gateway (chạy server trong container) | SC-03, ISO-04 cho MCP server | Chặn | Lúc chạy | OS | Cô lập MCP server, không cô lập chính agent và tool built-in; server vẫn làm được mọi thứ trong phạm vi container và mạng được cấp |
-| Anthropic Sandbox Runtime (`srt`) | ISO-02, ISO-03, NET-01 | Chặn | Lúc chạy | OS, Mạng | Mặc định cho đọc mọi nơi trừ đường dẫn trong `denyRead`, nên danh sách phải đủ (ISO-03); allowlist theo tên miền, không chặn exfil qua domain đã được phép (NET-03) và không biết phiên agent đã đọc gì; trên Linux, chặn UNIX socket bằng seccomp chỉ trên x64/arm64; Windows còn alpha |
+| Anthropic Sandbox Runtime (`srt`) | ISO-02, ISO-03, NET-01 | Chặn | Lúc chạy | OS, Mạng | Mặc định cho đọc mọi nơi trừ đường dẫn trong `denyRead`, nên danh sách phải đủ (ISO-03); allowlist theo tên miền: khi không bật TLS termination thì không chặn exfil qua domain đã được phép (NET-03), và dù bật cũng không biết phiên agent đã đọc gì; trên Linux, chặn UNIX socket bằng seccomp chỉ trên x64/arm64; Windows còn alpha và cần cài đặt bằng quyền admin |
 | bubblewrap | ISO-02, ISO-03 | Chặn | Lúc chạy | OS | Chỉ là cơ chế namespace: chính sách do người gọi viết; không tự lọc mạng theo tên miền, cần proxy đi kèm (NET-01) |
 | Landlock, `landrun` | ISO-03 | Chặn | Lúc chạy | OS | Lọc mạng TCP chỉ theo cổng (kernel 6.7+), không theo tên miền; việc chặn kết nối UNIX socket phụ thuộc phiên bản ABI (ISO-03) |
 | `sandbox-exec` | ISO-02, ISO-03, NET-01 | Chặn | Lúc chạy | OS, Mạng | Deprecated, không có tài liệu chính thức cho ngôn ngữ profile; không lọc mạng theo tên miền nếu không có proxy |
@@ -195,7 +194,7 @@ Quy ước:
 | LlamaFirewall, NeMo Guardrails | Bổ trợ D5 | Xác suất | Lúc chạy | LLM | Không phải ranh giới kiểm soát (Mục 1.5); chưa có đánh giá công khai với nội dung tiếng Việt (Mục 5.2) |
 | Sigstore `cosign`, OpenSSF model signing | SC-03, SC-06, SC-07 | Chặn khi bật kiểm chữ ký lúc chạy; nếu không thì chỉ là Nền | Trước khi chạy | OS | Chứng minh nguồn gốc, không chứng minh bản đã ký an toàn; vô dụng nếu không bật kiểm tra lúc chạy (SC-06) |
 | OpenID Shared Signals (CAEP, RISC) | CRED-03, OBS-04 | Nền | Lúc chạy | Credential | Chỉ có tác dụng ở hệ thống thật sự nhận và xử lý sự kiện; không thay TTL ngắn (CRED-03) |
-| OpenTelemetry (GenAI) | OBS-01, MA-04 | Phát hiện | Lúc chạy, Sau sự việc | Log | Chỉ ghi những gì được instrument; không tự chống sửa (OBS-02) |
+| OpenTelemetry (GenAI) | OBS-01, MA-04 | Phát hiện | Lúc chạy, Sau sự việc | Log | Chỉ ghi những gì được instrument; tham số tool call chỉ có khi bật Opt-In; conventions còn ở trạng thái Development nên tên thuộc tính có thể đổi; không tự chống sửa (OBS-02) |
 | Falco | OBS-03 | Phát hiện | Lúc chạy | OS | Báo động, không ngăn; chỉ Linux |
 | Tetragon | OBS-03 | Phát hiện; có thể Chặn khi bật policy enforcement | Lúc chạy | OS | Chỉ Linux; policy chặn phải tự viết và thử kỹ |
 | Trillian Tessera | OBS-02 | Phát hiện | Sau sự việc | Log | Phát hiện sửa log sau khi ghi; không ngăn thành phần ghi log bị chiếm ghi sai từ đầu (OBS-02) |
@@ -204,7 +203,7 @@ Quy ước:
 | Biscuit | MA-02 | Chặn | Lúc chạy | Credential | Chỉ có tác dụng khi service đích kiểm token và các ràng buộc của nó |
 | libfido2, python-fido2, thư viện WebAuthn server | ACT-06 | Nền | Lúc chạy | Credential | Khối xây dựng; security key không có màn hình, nên không chứng minh người duyệt đã thấy tham số nào (ACT-05) |
 
-Đọc bảng theo control thay vì theo công cụ thì thấy ngay chỗ trống: không có dòng nào *Chặn* ở tầng mạng mà biết phiên agent (NET-03 theo ngữ cảnh), không có dòng nào *Chặn* cho ACT-04 hay ACT-05, và ACT-06 chỉ có *Nền*. Đó cũng là các dòng trong bảng Khoảng trống dưới đây.
+Đọc bảng theo control thay vì theo công cụ thì thấy ngay chỗ trống: không có dòng nào *Chặn* ở tầng mạng mà biết phiên agent (NET-03 theo ngữ cảnh), không có dòng nào *Chặn* cho ACT-04 hay ACT-05, ACT-06 chỉ có *Nền*, và từ khi Snyk Agent Scan gỡ tool pinning thì SC-05 không còn công cụ nào. Đó cũng là các dòng trong bảng Khoảng trống dưới đây.
 
 ## Khoảng trống
 
@@ -212,13 +211,14 @@ Những nhu cầu dưới đây chưa có công cụ mã nguồn mở trưởng 
 
 | Khoảng trống | Control | Công cụ đã biết (nếu có) |
 | :--- | :--- | :--- |
-| Egress biết đang phục vụ phiên agent nào | NET-03 | |
-| Sandbox cho tiến trình tùy ý trên Windows | ISO-02, ISO-03 | `srt` (phần Windows đang phát triển); Windows Sandbox bọc cả VM, không theo tiến trình |
-| Phê duyệt có màn hình tin cậy và ràng buộc với tham số | ACT-05, ACT-06 | |
-| Capability lease có ngân sách | ACT-04 | |
+| Egress biết đang phục vụ phiên agent nào | NET-03 | Pipelock (lõi Apache 2.0, thử nghiệm): proxy egress và MCP có theo dõi theo phiên, nhưng bản miễn phí gắn phiên theo IP của client, còn định danh theo agent nằm ở bản trả phí |
+| Sandbox cho tiến trình tùy ý trên Windows | ISO-02, ISO-03 | `srt` (Windows alpha từ 06/2026); Sandboxie-Plus (GPL-3.0, sandbox theo tiến trình, không làm riêng cho agent; chưa kiểm phần lọc mạng nào cần bản trả phí); Windows Sandbox bọc cả VM, không theo tiến trình |
+| Phê duyệt có màn hình tin cậy và ràng buộc với tham số | ACT-05, ACT-06 | Tenuo (Apache 2.0, thử nghiệm): chữ ký phê duyệt ràng buộc với tool và tham số (ACT-06); không có màn hình tin cậy, nội dung hiển thị không nằm trong phần được ký (ACT-05) |
+| Capability lease có ngân sách | ACT-04 | Tenuo (Apache 2.0, thử nghiệm): warrant có thời hạn, ràng buộc tham số và chỉ thu hẹp được; không có ngân sách cộng dồn (số lần gọi, dung lượng) |
+| Pin định nghĩa tool trên đường đi, phát hiện rug pull | SC-05 | Snyk Agent Scan có tính năng này tới v0.4.5, đã gỡ từ v0.4.6 (03/2026) |
 | Định dạng chung cho fingerprint tool và bản ghi hành động | SC-05, OBS-02 | Companion spec (Phụ lục E), bản nháp `aab-00` trong `companion-spec/` |
-| Information-flow control dùng được trong sản xuất | NET-03, Nguyên lý 3 | CaMeL (nghiên cứu) |
-| Bộ test và dữ liệu red team tiếng Việt | Bổ trợ D5, MEM-05 | |
+| Information-flow control dùng được trong sản xuất | NET-03, Nguyên lý 3 | CaMeL (nghiên cứu), Microsoft FIDES (nghiên cứu) |
+| Bộ test và dữ liệu red team tiếng Việt | Bổ trợ D5, MEM-05 | MultiJail (MIT) có tiếng Việt nhưng là prompt jailbreak về nội dung độc hại, không phải prompt injection vào agent |
 
 ---
 
