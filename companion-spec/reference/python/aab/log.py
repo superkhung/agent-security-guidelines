@@ -238,6 +238,8 @@ def verify_checkpoint_signature(bundle: Bundle, cp: dict, trust: LogTrust, backe
     if entry is None:
         raise AabError(E_LOG_CHECKPOINT, "kid is not a key of this log")
     alg, reg = prot[1], entry.cose_key.get("alg")
+    if not isinstance(alg, int) or isinstance(alg, bool):
+        raise AabError(E_LOG_CHECKPOINT, "checkpoint alg is not an integer")
     if (alg not in sigs.EQUIVALENT or reg not in sigs.EQUIVALENT or sigs.EQUIVALENT[alg] != sigs.EQUIVALENT[reg]
             or sigs.EQUIVALENT[reg] == sigs.RS256):
         raise AabError(E_LOG_CHECKPOINT, "checkpoint alg %r not allowed or not the key's" % (alg,))
@@ -250,7 +252,7 @@ def verify_checkpoint_signature(bundle: Bundle, cp: dict, trust: LogTrust, backe
     except sigs.SignatureFailure as exc:
         raise AabError(E_LOG_CHECKPOINT, str(exc))
     if bundle.timestamp is not None:
-        # SPEC-AMBIGUITY: 9.4 rule 2 / 9.5 step 3.1 (F-41): no RFC 3161
+        # SPEC-AMBIGUITY: 9.4 rule 2 / 9.5 step 3.7 (F-41): no RFC 3161
         # validation profile (trusted TSAs, required checks, genTime vs the
         # checkpoint time), so no conforming check can be written.
         raise Unsupported("RFC 3161 time-stamp token validation is not implemented")

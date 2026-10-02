@@ -16,14 +16,14 @@ Phiên bản của guideline theo dạng `MAJOR.MINOR.PATCH`. Mỗi phiên bản
   - Client agent khác có trên máy thành *Cần xem* ở ISO-02; Antigravity CLI tắt sandbox hay chạy tool không hỏi thành *Chưa đạt*.
 - `companion-spec/`: bản nháp `aab-01` (file mới `agent-action-binding-draft-01.md`; `aab-00` giữ nguyên, có git tag `aab-00`). Sửa bảy lỗi thiết kế F-1..F-7 mà bản cài đặt tham chiếu tìm ra:
   - signature counter được so với mốc lúc phát challenge, nên các lời duyệt song song hoàn tất theo thứ tự nào cũng được;
-  - thứ tự kiểm khi cấp lease được viết tường minh;
+  - thứ tự kiểm khi cấp lease được viết tường minh; lease bắt đầu từ lúc được cấp và phải được cấp trong 5 phút kể từ lúc phát challenge;
   - grantee của lease được kiểm khi cấp và ở mỗi lời gọi;
   - ràng buộc nêu tool không có trong lease bị từ chối;
   - có định dạng bundle cho checkpoint đã ký và cấu hình tin cậy của auditor;
   - container mang loại đối tượng;
   - trường JSON trong record phải ở dạng chuẩn (`E_NOT_CANONICAL`).
 
-  `version` của container là chuỗi `"01"` (F-46). Có 166 file vector (17 mới); bản cài đặt tham chiếu đã cập nhật theo.
+  `version` của container là chuỗi `"01"` (F-46). Có 169 file vector (20 mới); bản cài đặt tham chiếu đã cập nhật theo.
 - `examples/claude-code/`: settings của Claude Code đã kiểm thử.
 - `TOOLS.md`: bảng "Công cụ đóng boundary nào".
 

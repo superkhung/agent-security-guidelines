@@ -832,12 +832,12 @@ def entry(tool, sid=SID_D1_OBJ, fp=None):
 
 
 def build_lease(tools=None, constraints=None, max_calls=10, max_arg_bytes=None, na=LEASE_NA, tools_bytes=None,
-                constraints_bytes=None, lease_id=LEASE_ID, grantor="alice@example.internal"):
+                constraints_bytes=None, lease_id=LEASE_ID, grantor="alice@example.internal", nb=NB):
     tools = tools if tools is not None else [entry(TOOL_D1), entry(TOOL_WRITE)]
     if constraints is None:
         constraints = [{"tool": "write_file", "pointer": "/path", "op": "beneath", "value": "src"}]
     return lease.build(PROXY, lease_id, SESSION, grantor, "agent-1", tools, constraints,
-                       max_calls, NB, na, max_arg_bytes=max_arg_bytes, tools_bytes=tools_bytes,
+                       max_calls, nb, na, max_arg_bytes=max_arg_bytes, tools_bytes=tools_bytes,
                        constraints_bytes=constraints_bytes)
 
 
@@ -928,6 +928,12 @@ def gen_ls():
     grant("LS-026", "Constraint whose tool is not in the lease tool set",
           build_lease(constraints=[{"tool": "delete_file", "pointer": "/path", "op": "beneath", "value": "src"}]),
           reject("E_VALUE"))
+    grant("LS-028", "Grant verified later than not_before + 330 000 ms", build_lease(), reject("E_EXPIRED"),
+          ctx_over={"now": NB + 330_001},
+          note="not_before is the time the grant challenge was issued (Section 8.1); the grant must be verified "
+               "within 300 000 ms plus skew of it (8.4 check 5).")
+    grant("LS-029", "Lease whose not_before lies in the future", build_lease(nb=NOW + 30_001, na=NOW + 3_600_000),
+          reject("E_EXPIRED"), note="A pre-signed lease for a later start is not allowed (8.4 check 5, finding F-30).")
     l24 = build_lease(grantor="bob@example.internal")
     r24 = ref_bytes("lease", l24)
     vec("LS-024", "Device-key grant signed with a credential that does not belong to the grantor", "lease-grant",
@@ -1103,6 +1109,8 @@ def gen_log():
     laudit("LOG-023", "Log key with RS256", r[:5], [anchored(r, 5, prot={1: -257, 4: LOG_KID})],
            catalogue=reject("E_LOG_CHECKPOINT"), inp_extra={"log_trust": rsa_trust},
            note="RS256 is not allowed for log keys (Section 9.3); rejected before the signature.")
+    laudit("LOG-025", "Checkpoint alg that is not an integer", r[:5], [anchored(r, 5, prot={1: [-7], 4: LOG_KID})],
+           catalogue=reject("E_LOG_CHECKPOINT"), note="Protected header alg is an array; rejected before the signature.")
     good = log.decode_bundle(bytes.fromhex(anchored(r, 5)))
     unsorted = (b"\xa3" + cbor.encode(2) + cbor.encode(good.checkpoint) + cbor.encode(1) + cbor.encode("01")
                 + cbor.encode(3) + cbor.encode(good.cose_sign1))

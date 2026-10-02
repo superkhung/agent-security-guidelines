@@ -66,7 +66,7 @@ Comments on any item: open an Issue with the "Companion spec (aab)" template and
 | F-27 | 8.3 | Required members per `op` are implicit; pointer and value types are unchecked; a non-array `constraints` has no error. | `value` required except for `absent`; valid RFC 6901 pointer; `E_VALUE` |
 | F-28 | 8.3 `beneath` | Whether the root itself holds (`src` beneath `src`) is not stated. | Holds, per the letter of the rule |
 | F-29 | 8.1 | Order of entry decoding vs the sort and duplicate check is not given; the "proper prefix" sentence is vacuous because entries are self-delimiting. | Decodes first |
-| F-30 | 8.4 check 4 | A lease whose start is far in the future is accepted at grant. | Accepted |
+| F-30 | 8.4 check 4 | A lease whose start is far in the future is accepted at grant. | **Resolved in aab-01**: `not_before` is the grant challenge time and the grant is verified within 330 000 ms of it (8.1, 8.4 check 5), `E_EXPIRED` |
 
 ## Log (Section 9)
 

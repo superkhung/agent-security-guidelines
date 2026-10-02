@@ -23,11 +23,11 @@ Python 3.10 or newer. The core is standard library only. An optional signature b
 imports, and nothing else depends on it.
 
 ```sh
-# Standard library only: 137 vectors decided, 27 need the backend (not decided), 2 pending.
+# Standard library only: 140 vectors decided, 27 need the backend (not decided), 2 pending.
 python3 -m unittest discover -s companion-spec/reference/python/tests
 python3 companion-spec/vectors/run.py
 
-# With the signature backend: 164 decided, 2 pending.
+# With the signature backend: 167 decided, 2 pending.
 python3 -m venv .venv && .venv/bin/pip install cryptography==50.0.1
 .venv/bin/python -m unittest discover -s companion-spec/reference/python/tests
 .venv/bin/python companion-spec/vectors/run.py
@@ -85,10 +85,10 @@ record, the domain prefix and the D.2 action digest); see `tests/test_appendix_d
 | ACT | 20 | 18 | 2 | 20 | 0 |
 | WA | 34 | 25 | 9 | 34 | 0 |
 | DK | 7 | 5 | 2 | 7 | 0 |
-| LS | 27 | 27 | 0 | 27 | 0 |
-| LOG | 24 | 12 | 11 | 23 | 1 (LOG-017) |
+| LS | 29 | 29 | 0 | 29 | 0 |
+| LOG | 25 | 13 | 11 | 24 | 1 (LOG-017) |
 | E2E | 3 | 0 | 3 | 3 | 0 |
-| **Total** | **166** | **137** | **27** | **164** | **2** |
+| **Total** | **169** | **140** | **27** | **167** | **2** |
 
 "Decided" means the file carries a provisional expected value and this implementation matches it.
 
@@ -162,7 +162,16 @@ Files follow Section 12.2. Section 12.2 leaves much open, so these extensions ar
 - `context`: verifier state for evidence, lease, log and e2e vectors: `now`, `proxy_id`,
   `open_sessions`, `request_session`, `pending` entries, `current_fingerprints`, `tool_classes`,
   `credentials` (with a COSE key as `kty`, `crv`, `alg`, `x_hex`, `y_hex`, ...), `rp_id`,
-  `allowed_origins`, `forbid_synced`, `accept_rs256`, `granted_leases`, `forbidden_tools`.
+  `allowed_origins`, `forbid_synced`, `accept_rs256`, `granted_leases`, `forbidden_tools`,
+  `session_agents` (session id hex → list of agent ids, Section 2.4).
+- Credential counters (Section 7.2 step 8): `counter` is the *base* value (registration value,
+  raised by acceptances older than 360 000 ms); `history` is a list of
+  `[accepted_at_ms, counter]` pairs. A missing `history` means none.
+- Lease calls (`lease-call`): each call carries the calling agent's `agent_id` (required).
+- Log audits (`log-audit`, `e2e`): `input.anchored` is a list of signed checkpoint bundles as hex
+  (Section 9.3); `input.log_trust` is the auditor configuration of Section 9.6: `alg`, and `keys`,
+  each with `kid_hex`, `cose_key`, `not_before` and `not_after`. `writer_only_checkpoints` are
+  bundles the log writer supplied itself; the auditor ignores them.
 - `expected.status`: `provisional` (one implementation) or `pending` (none yet). Provisional
   values carry `source`. `expected.differs_from` / `expected.same_as` name another vector.
 - `requires: ["crypto"]`: the outcome depends on a real signature. `precheck` holds the outcome
@@ -176,7 +185,7 @@ Files follow Section 12.2. Section 12.2 leaves much open, so these extensions ar
 ## Ambiguities found
 
 Every place where the spec was ambiguous, contradictory or not implementable as written is
-marked in the code and collected in [SPEC-FINDINGS.md](SPEC-FINDINGS.md) (F-1 to F-45):
+marked in the code and collected in [SPEC-FINDINGS.md](SPEC-FINDINGS.md) (F-1 to F-46; those resolved in `aab-01` are marked):
 
 ```sh
 grep -rn "SPEC-AMBIGUITY" companion-spec/reference/python

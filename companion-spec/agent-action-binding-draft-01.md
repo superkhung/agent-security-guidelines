@@ -437,7 +437,7 @@ The verifier MUST perform all of the following, in this order, and reject on the
 
    The check passes if `c_max = 0` and `received = 0` (an authenticator that does not use counters), or if `received > c_snap` and `received` is not in `later`. Else `E_WA_COUNTER`. This step runs inside the atomic step below.
 
-   Rationale: approvals may complete in any order (Section 6.2), so an assertion signed before another one may be presented after it. Comparing with the counter as of the record's `not_before` accepts both, while a cloned authenticator that reuses a counter value, or signs with a value below one accepted before the challenge was issued, is still rejected.
+   Rationale: approvals may complete in any order (Section 6.2), so an assertion signed before another one may be presented after it. Comparing with the counter as of the record's `not_before` accepts both, while a cloned authenticator that reuses a counter value, or signs with a value below one accepted before the challenge was issued, is still rejected. For a lease grant the snapshot time is likewise the time the grant challenge was issued, because Section 8.1 makes the lease's `not_before` that time.
 
 **Atomic step.** After steps 1–7 the verifier, as one atomic operation: checks that the pending entry for `(session id, sequence)` is still unconsumed and equals key `3` (else `E_REPLAY`); runs step 8 against the current counter state (else `E_WA_COUNTER`); then consumes the pending entry and records `(now, received)` in the credential's history. If either check fails, neither the pending entry nor the counter state changes.
 
@@ -501,7 +501,7 @@ Log keys that sign checkpoints use this table without RS256, and ES256 checkpoin
 | `0x07` | constraints | REQUIRED | `jcs(constraints)`, Section 8.3; `jcs([])` for none |
 | `0x08` | max calls | REQUIRED | `u64` |
 | `0x09` | max argument bytes | OPTIONAL | `u64`: total of `len(jcs(arguments))` over all calls |
-| `0x0A` | not before | REQUIRED | `i64` |
+| `0x0A` | not before | REQUIRED | `i64`: the time the proxy issues the grant challenge. The proxy MUST set it so; a lease therefore starts when it is granted, and the counter check of Section 7.2 step 8 uses this time as its snapshot |
 | `0x0B` | not after | REQUIRED | `i64`; `not_after − not_before` MUST NOT exceed 28 800 000 ms (8 hours) `[OI-19]` |
 
 A **tool entry** is the sub-structure (Section 4.2) `lp(server identity) ‖ lp(utf8(name)) ‖ lp(fingerprint reference)`.
@@ -573,7 +573,7 @@ The grant evidence is the container of Section 7.1, with key `11` `"lease"`, key
    | 2 | The grantee (field `0x05`) is not an agent of that session (Section 2.4) | `E_LEASE_SCOPE` |
    | 3 | The audience is not this verifier | `E_AUDIENCE` |
    | 4 | `not_after < not_before`, or `not_after − not_before` exceeds 28 800 000 ms | `E_EXPIRED` |
-   | 5 | The current time is later than `not_after + 30 000 ms` | `E_EXPIRED` |
+   | 5 | The current time is earlier than `not_before − 30 000 ms`, later than `not_before + 330 000 ms` (the action approval window of Section 6.1 plus skew), or later than `not_after + 30 000 ms` | `E_EXPIRED` |
    | 6 | The lease id has been granted before (including leases since revoked or exhausted) | `E_REPLAY` |
    | 7 | An entry's fingerprint differs from the tool's current fingerprint | `E_FP_CHANGED` |
    | 8 | An entry is a tool classified as irreversible or privileged, or a shell tool (guideline ACT-01, ACT-04). The classification comes from the organization's policy, not from annotations | `E_LEASE_SCOPE` |
@@ -668,7 +668,7 @@ A bundle that is not deterministically encoded, has an unknown key, misses a req
 
 **COSE_Sign1 profile.** The protected header contains `alg` (label 1) and `kid` (label 4, a bstr naming the log key). The unprotected header MUST be empty. The payload is the checkpoint digest reference (Section 4.5, object type `checkpoint`, with the log's hash algorithm), attached, not detached. `external_aad` is empty.
 
-**Log key algorithms.** ES256 or ESP256 (`−7`, `−9`) with the signature as raw `r ‖ s`, and Ed25519 (`−8`, `−19`), as in Section 7.5. RS256 is not allowed. An ES256 signature MUST have `s ≤ n/2` (low S), because the software that signs checkpoints is under the deployment's control; a signature with high S MUST be rejected even though it verifies mathematically. This gives each checkpoint exactly one valid signature byte string. `[OI-12]`
+**Log key algorithms.** ES256 or ESP256 (`−7`, `−9`) with the signature as raw `r ‖ s`, and Ed25519 (`−8`, `−19`), as in Section 7.5. RS256 is not allowed. An ES256 or ESP256 signature MUST have `s ≤ n/2` (low S), because the software that signs checkpoints is under the deployment's control; a signature with high S MUST be rejected even though it verifies mathematically. Low S makes a checkpoint signature non-malleable by third parties: nobody but the signer can turn one valid signature into another. It does not make the signature unique, because the signer can always produce other valid signatures, so a signature's bytes MUST NOT be used to identify a checkpoint; the checkpoint digest does that. `[OI-12]`
 
 A checkpoint SHOULD be produced at least every `N` records or every `T` seconds, whichever comes first. `N` and `T` are deployment choices. `[OI-11]`
 
@@ -903,7 +903,8 @@ The findings are listed in `reference/SPEC-FINDINGS.md`; issues are in the repos
 
 | Finding | Change | Where |
 | :--- | :--- | :--- |
-| F-1 | Signature counter compared with the snapshot at the record's `not_before`, within one atomic step with the pending entry; `not_before` is the pending entry's creation time | 6.1, 6.2, 6.4, 7.2, 8.4, 13.4, 13.5 |
+| F-1 | Signature counter compared with the snapshot at the record's `not_before`, within one atomic step with the pending entry; `not_before` is the time the challenge is issued, for actions and for lease grants | 6.1, 6.2, 6.4, 7.2, 8.1, 8.4, 13.4, 13.5 |
+| F-30 | A lease grant is verified within 330 000 ms of its `not_before`, so a lease cannot be pre-signed for a later start | 8.1, 8.4 |
 | F-2 | Grant verification order written out step by step; the credential check runs for both profiles | 7.3, 8.4 |
 | F-3 | Lease grantee checked at grant (an agent of the session) and on every call; a session may have several agents | 2.4, 8.2, 8.4 |
 | F-4 | A constraint's `tool` must name a tool in the lease, else `E_VALUE` at grant | 8.3 |
@@ -1094,6 +1095,8 @@ Vectors in this group include a test authenticator key pair so that runners can 
 | LS-025 | Call by an agent of the session that is not the grantee | reject `E_LEASE_SCOPE` |
 | LS-026 | Constraint whose `tool` is not in the lease tool set | reject at grant `E_VALUE` |
 | LS-027 | Grant whose grantee is not an agent of the session | reject at grant `E_LEASE_SCOPE` |
+| LS-028 | Grant verified later than `not_before + 330 000 ms` | reject at grant `E_EXPIRED` |
+| LS-029 | Lease whose `not_before` lies in the future | reject at grant `E_EXPIRED` |
 
 ### B.7. LOG · Log chain
 
@@ -1123,6 +1126,7 @@ Vectors in this group include a test authenticator key pair so that runners can 
 | LOG-022 | Checkpoint head computed with `sha-384` in a `sha-256` log | `E_ALG_MISMATCH` |
 | LOG-023 | Log key with RS256 | `E_LOG_CHECKPOINT` |
 | LOG-024 | Bundle with map keys out of deterministic order | `E_LOG_CHECKPOINT` |
+| LOG-025 | Checkpoint protected header with an `alg` that is not an integer | `E_LOG_CHECKPOINT` |
 
 ### B.8. E2E · End to end
 

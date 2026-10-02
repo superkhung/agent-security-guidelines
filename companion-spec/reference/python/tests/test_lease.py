@@ -89,6 +89,19 @@ class Grantee(unittest.TestCase):
         self.assertEqual(self.grant_code(["agent-2"]), "E_LEASE_SCOPE")
         self.assertIsNone(self.grant_code(["agent-1", "agent-2"]))
 
+    def grant_code_at(self, now):
+        ctx_json = dict(self.ctx_json, now=now)
+        ctx = self.vectorexec.build_approval_context(ctx_json)
+        return code(lease.check_lease_record, self.rec, ctx, lease.GrantState())
+
+    def test_grant_window(self):
+        """not_before is the grant challenge time; the grant is verified within 330 000 ms of it."""
+        nb = self.rec["not_before"]
+        self.assertIsNone(self.grant_code_at(nb + 330_000))
+        self.assertEqual(self.grant_code_at(nb + 330_001), "E_EXPIRED")
+        self.assertIsNone(self.grant_code_at(nb - 30_000))
+        self.assertEqual(self.grant_code_at(nb - 30_001), "E_EXPIRED")
+
     def call(self, **kw):
         e = self.rec["tools"][0]
         return lease.enforce_call(self.rec, lease.LeaseUsage(), self.rec["not_before"], self.rec["session"],

@@ -45,6 +45,7 @@ from .records import (
 
 OBJECT_TYPE = "lease"
 MAX_WINDOW_MS = 28_800_000
+GRANT_WINDOW_MS = 300_000  # Section 8.4 check 5, the action approval window of 6.1
 
 OPS = ("eq", "prefix", "beneath", "in", "max", "absent")
 
@@ -169,9 +170,9 @@ def _valid_pointer(p) -> bool:
 
 
 def validate_constraints(constraints, tool_names: Set[str]) -> None:
-    """Grant-time validation (Section 8.3, 8.4 check 8). Failures are E_VALUE."""
+    """Grant-time validation (Section 8.3, 8.4 check 9). Failures are E_VALUE."""
     # SPEC-AMBIGUITY: 8.1/8.3: `constraints` that is valid JSON but not an
-    # array has no stated error. We treat it as malformed (E_VALUE at check 8).
+    # array has no stated error. We treat it as malformed (E_VALUE at check 9).
     if not isinstance(constraints, list):
         raise AabError(E_VALUE, "constraints is not an array")
     for c in constraints:
@@ -281,7 +282,7 @@ def check_constraints(constraints, tool_name: str, arguments) -> None:
 
 
 class GrantState:
-    """Lease ids ever granted, and tool policy classification (8.4 checks 5, 7)."""
+    """Lease ids ever granted, and tool policy classification (8.4 checks 6, 8)."""
 
     def __init__(self, granted: Iterable[bytes] = (), forbidden_tools: Optional[Dict[Tuple[bytes, str], str]] = None):
         self.granted: Set[bytes] = set(granted)
@@ -300,11 +301,11 @@ def check_lease_record(rec: dict, ctx: evidence.ApprovalContext, grants: GrantSt
         raise AabError(E_AUDIENCE, "audience %r" % rec["audience"])
     if not window_ok(rec["not_before"], rec["not_after"], MAX_WINDOW_MS):
         raise AabError(E_EXPIRED, "lease window invalid or longer than 8 hours")
-    # SPEC-AMBIGUITY: 8.4 check 4: only expiry is checked at grant; a lease
-    # whose not_before lies far in the future (a pre-signed lease) is
-    # accepted. We apply the check as written.
-    if st.now > rec["not_after"] + SKEW_MS:
-        raise AabError(E_EXPIRED, "lease already expired")
+    # Check 5: not_before is the grant challenge time (Section 8.1), and the
+    # grant is verified within the action approval window of it.
+    if (st.now < rec["not_before"] - SKEW_MS or st.now > rec["not_before"] + GRANT_WINDOW_MS + SKEW_MS
+            or st.now > rec["not_after"] + SKEW_MS):
+        raise AabError(E_EXPIRED, "grant outside its window, or lease already expired")
     if rec["lease_id"] in grants.granted:
         raise AabError(E_REPLAY, "lease id granted before")
     for e in rec["tools"]:

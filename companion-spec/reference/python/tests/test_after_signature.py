@@ -154,12 +154,13 @@ class CheckpointBundle(unittest.TestCase):
     def records(self, n=3):
         return [log.build(self.LOG_ID, i, 1000 + i, bytes(16), 0, 0) for i in range(n)]
 
-    def bundle(self, size=3, prot=None, unprot=None, head_alg="sha-256", sig=None, extra=None):
+    def bundle(self, size=3, prot=None, unprot=None, head_alg="sha-256", sig=None, extra=None, prot_b=None):
         hs = log.heads(self.LOG_ID, self.records()[:size], head_alg)
         cp = log.build_checkpoint(self.LOG_ID, size, records.DigestRef(head_alg, hs[size]), 2000)
         payload = log.checkpoint_ref(cp, "sha-256").encode()
         prot = {1: -7, 4: self.KID} if prot is None else prot
-        cose = cbor.encode(cbor.Tag(18, [cbor.encode(prot), unprot or {}, payload, sig or self.LOW_SIG]))
+        prot_b = cbor.encode(prot) if prot_b is None else prot_b
+        cose = cbor.encode(cbor.Tag(18, [prot_b, unprot or {}, payload, sig or self.LOW_SIG]))
         if extra is None:
             return log.encode_bundle(cp, cose)
         m = {1: "01", 2: cp, 3: cose}
@@ -176,6 +177,13 @@ class CheckpointBundle(unittest.TestCase):
         self.assertEqual(log.encode_bundle(d.checkpoint, d.cose_sign1), b)
         out = log.audit(self.records(), [b], self.LOG_ID, self.trust(), backend=ACCEPT_ALL())
         self.assertEqual((out["error"], out["verified_up_to"]), (None, 2))
+
+    def test_alg_wrong_type(self):
+        self.assertEqual(self.error(self.bundle(prot={1: [1], 4: self.KID})), "E_LOG_CHECKPOINT")
+        import struct
+        float_alg = b"\xa2\x01\xfb" + struct.pack(">d", -7.0) + b"\x04\x50" + self.KID
+        self.assertEqual(self.error(self.bundle(prot_b=float_alg)), "E_LOG_CHECKPOINT")
+        self.assertEqual(self.error(self.bundle(prot={1: True, 4: self.KID})), "E_LOG_CHECKPOINT")
 
     def test_bundle_unknown_key(self):
         self.assertEqual(self.error(self.bundle(extra={5: b""})), "E_LOG_CHECKPOINT")
