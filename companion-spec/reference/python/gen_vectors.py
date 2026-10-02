@@ -831,11 +831,11 @@ def entry(tool, sid=SID_D1_OBJ, fp=None):
 
 
 def build_lease(tools=None, constraints=None, max_calls=10, max_arg_bytes=None, na=LEASE_NA, tools_bytes=None,
-                constraints_bytes=None, lease_id=LEASE_ID):
+                constraints_bytes=None, lease_id=LEASE_ID, grantor="alice@example.internal"):
     tools = tools if tools is not None else [entry(TOOL_D1), entry(TOOL_WRITE)]
     if constraints is None:
         constraints = [{"tool": "write_file", "pointer": "/path", "op": "beneath", "value": "src"}]
-    return lease.build(PROXY, lease_id, SESSION, "alice@example.internal", "agent-1", tools, constraints,
+    return lease.build(PROXY, lease_id, SESSION, grantor, "agent-1", tools, constraints,
                        max_calls, NB, na, max_arg_bytes=max_arg_bytes, tools_bytes=tools_bytes,
                        constraints_bytes=constraints_bytes)
 
@@ -920,6 +920,14 @@ def gen_ls():
           {"calls": [reject("E_LEASE_CONSTRAINT")] * 4})
     grant("LS-023", "beneath constraint with value ../src",
           build_lease(constraints=[{"pointer": "/path", "op": "beneath", "value": "../src"}]), reject("E_VALUE"))
+    l24 = build_lease(grantor="bob@example.internal")
+    r24 = ref_bytes("lease", l24)
+    vec("LS-024", "Device-key grant signed with a credential that does not belong to the grantor", "lease-grant",
+        inp={"evidence_hex": container(l24, object_type="lease", profile="device-key", cred_id=CRED_ID_DK,
+                                       cose=cose_sign1(r24)).hex()},
+        ctx=base_context(), catalogue=reject("E_CREDENTIAL"), extra=KEYS_EXTRA,
+        note="The lease names bob as grantor; the device-key credential belongs to alice and its COSE signature "
+             "is valid. Section 8.4 step 4 runs the credential check for both profiles (finding F-2).")
 
 
 # --- LOG -------------------------------------------------------------------------

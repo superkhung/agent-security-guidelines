@@ -299,8 +299,7 @@ def device_key_tail(ctx: ApprovalContext, m: dict, cred: Credential) -> None:
         raise AabError(E_COSE, "kid differs from key 4")
     alg = prot[1]
     reg = cred.key.get("alg")
-    # SPEC-AMBIGUITY: 7.3 step 5 / 7.5: RS256 is "not allowed" for device-key
-    # but no step says where it is rejected. We reject it here with E_COSE.
+    # Step 5: RS256 is not allowed for device-key (Section 7.5).
     if (not isinstance(alg, int) or isinstance(alg, bool) or alg not in sigs.EQUIVALENT
             or reg not in sigs.EQUIVALENT or sigs.EQUIVALENT[alg] != sigs.EQUIVALENT[reg]
             or sigs.EQUIVALENT[reg] == sigs.RS256):

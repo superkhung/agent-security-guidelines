@@ -321,14 +321,8 @@ def verify_grant(data: bytes, ctx: evidence.ApprovalContext, grants: GrantState)
     m = evidence.decode_container(data, OBJECT_TYPE)                      # step 1
     ref, rec = evidence.bind_record(m, decode, ctx.state.cfg)             # step 2
     check_lease_record(rec, ctx, grants)                                  # step 3
-    # SPEC-AMBIGUITY: 8.4 step 4 / 7.2 step 4: which action class a lease
-    # grant needs is not defined. We require the grantor to be authorized
-    # for the class of every tool in the lease.
+    # Step 4: the grantor must be authorized for the class of every tool.
     classes = [ctx.tool_classes.get(e.name) for e in rec["tools"]]
-    # SPEC-AMBIGUITY: 8.4 steps 1 and 4 say "Step 1 of Section 7.3" and "the
-    # remaining steps of Section 7.3", but 7.3 step 1 *is* 7.2 steps 1-4, so a
-    # literal reading skips the credential check for device-key grants. We
-    # run 7.2 step 4 for both profiles, then the profile's remaining steps.
     cred = evidence.lookup_credential(ctx, m[4], classes, rec["grantor"])  # step 4 (7.2 step 4)
     count = None
     if m[2] == evidence.WEBAUTHN:

@@ -449,16 +449,16 @@ Step 2 binds the record to the signed digest; steps 5 and 7 bind the digest to t
 
 For a key held in Secure Enclave or a TPM, gated by biometric or PIN, the verifier MUST perform, in this order, and reject on the first failure:
 
-1. Steps 1–4 of Section 7.2, with `profile = "device-key"`.
+1. **Container, record, record checks, credential.** Steps 1, 2, 3 and 4 of Section 7.2, in that order, with `profile = "device-key"`.
 2. Decode key `9` as a tagged COSE_Sign1 (CBOR tag 18). Else `E_COSE`.
 3. The protected header contains `alg` and `kid`, and neither appears in the unprotected header. Else `E_COSE`.
 4. `kid` equals key `4`. Else `E_COSE`.
-5. `alg` equals the registered key's algorithm, or its equivalent in Section 7.5. Else `E_COSE`.
+5. `alg` equals the registered key's algorithm, or its equivalent in Section 7.5; the equivalences of Section 7.5 hold in both directions. RS256 (`−257`) is not allowed for this profile, whatever the registered key. Else `E_COSE`.
 6. The payload is present (not detached). Else `E_COSE`.
 7. The payload equals key `3` byte for byte. Else `E_DIGEST_MISMATCH`.
 8. The signature verifies over the `Sig_structure` of RFC 9052 §4.4 with empty `external_aad`, in the format of Section 7.5. Else `E_COSE`.
 
-On success, the verifier consumes the pending entry (Section 6.4). There is no signature counter.
+On success, the verifier consumes the pending entry with the atomic compare-and-delete of Section 6.4. There is no signature counter.
 
 The result of a local authentication API that returns only a boolean (for example `LAContext.evaluatePolicy`, `UserConsentVerifier`) is not evidence under any profile.
 
@@ -562,9 +562,9 @@ All applicable constraints must hold (logical AND). A pointer that does not reso
 
 The grant evidence is the container of Section 7.1, with key `11` `"lease"`, key `10` holding the lease record and key `3` its digest reference. The verifier MUST perform, in this order, and reject on the first failure:
 
-1. Step 1 of Section 7.2 (or of Section 7.3 for `device-key`).
-2. Step 2 of Section 7.2, decoding key `10` as a lease record (Section 8.1). Else the errors of Section 4, or `E_DIGEST_MISMATCH`.
-3. Lease record checks, in order:
+1. **Container.** Step 1 of Section 7.2, for the evidence's profile (`webauthn` or `device-key`), with `object = "lease"`. Else `E_CBOR`.
+2. **Record.** Step 2 of Section 7.2, decoding key `10` as a lease record (Section 8.1). Else the errors of Section 4, or `E_DIGEST_MISMATCH`.
+3. **Lease record checks**, in order:
 
    | # | Condition | Error |
    | :--- | :--- | :--- |
@@ -577,7 +577,8 @@ The grant evidence is the container of Section 7.1, with key `11` `"lease"`, key
    | 7 | An entry is a tool classified as irreversible or privileged, or a shell tool (guideline ACT-01, ACT-04). The classification comes from the organization's policy, not from annotations | `E_LEASE_SCOPE` |
    | 8 | A constraint element is malformed (Section 8.3) | `E_VALUE` |
 
-4. Steps 4–8 of Section 7.2 (or the remaining steps of Section 7.3). In step 4, the credential MUST belong to the grantor in field `0x04`. Else `E_CREDENTIAL`.
+4. **Credential.** Step 4 of Section 7.2, for both profiles: the credential MUST be known and not revoked, MUST belong to the grantor in field `0x04`, and its approver MUST be authorized for the action class of every tool in the lease tool set. Else `E_CREDENTIAL`.
+5. **Signature.** For `webauthn`, steps 5–8 of Section 7.2. For `device-key`, steps 2–8 of Section 7.3.
 
 The final checks run as one atomic operation, as in Section 7.2: the lease id has not been granted (else `E_REPLAY`) and, for `webauthn`, step 8 of Section 7.2 with the lease record's `not_before` (else `E_WA_COUNTER`). Then the verifier records the lease id permanently, before the lease becomes active, and the counter, and logs a lease grant record (Section 9.1). If either check fails, nothing is recorded.
 
@@ -868,7 +869,10 @@ The findings are listed in `reference/SPEC-FINDINGS.md`; issues are in the repos
 | Finding | Change | Where |
 | :--- | :--- | :--- |
 | F-1 | Signature counter compared with the snapshot at the record's `not_before`, within one atomic step with the pending entry; `not_before` is the pending entry's creation time | 6.1, 6.2, 6.4, 7.2, 8.4, 13.4, 13.5 |
+| F-2 | Grant verification order written out step by step; the credential check runs for both profiles | 7.3, 8.4 |
 | F-6 | Evidence container key `11` names the object type of key `10`; an endpoint rejects the other type | 7.1, 7.2, 8.4 |
+| F-25 | Device-key: RS256 rejected at step 5; algorithm equivalences hold in both directions | 7.3 |
+| F-26 | A lease grant needs the grantor to be authorized for every tool in the lease | 8.4 |
 | F-7 | JSON fields inside records MUST already be canonical; new error `E_NOT_CANONICAL` | 4.3, 10 |
 | F-46 | Container `version` is the text label of the domain prefix (`"01"`), so draft and frozen versions cannot collide; domain prefix `aab/01/` | 4.5, 7.1, 9.2, 11 |
 
@@ -1046,6 +1050,7 @@ Vectors in this group include a test authenticator key pair so that runners can 
 | LS-021 | `beneath` constraint `src`, argument `srcfoo/a` | reject `E_LEASE_CONSTRAINT` |
 | LS-022 | `beneath` constraint `src`, arguments `./src/a`, `src//a`, `/etc/passwd`, `src\..\x` | each rejected `E_LEASE_CONSTRAINT` |
 | LS-023 | `beneath` constraint with `value` `../src` | reject at grant `E_VALUE` |
+| LS-024 | `device-key` grant whose credential does not belong to the grantor | reject at grant `E_CREDENTIAL` |
 
 ### B.7. LOG · Log chain
 

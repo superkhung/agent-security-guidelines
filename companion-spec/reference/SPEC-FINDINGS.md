@@ -13,7 +13,7 @@ Comments on any item: open an Issue with the "Companion spec (aab)" template and
 | # | Section | Problem | Code today | Proposed fix |
 | :--- | :--- | :--- | :--- | :--- |
 | F-1 | 7.2 step 8 vs 6.2 rule 1 | Approvals may complete in any order, but with an authenticator that increments its signature counter, two approvals presented in the opposite order to signing make the second one fail `E_WA_COUNTER`. The spec also does not say how the counter update and the pending-entry consumption are made atomic together. | Snapshot rule and atomic step | **Resolved in aab-01**: counter compared with the snapshot at `not_before`, not reused since; one atomic step for counter and pending entry (7.2 step 8); ACT-018 signs in the opposite order to presentation |
-| F-2 | 8.4 steps 1 and 4 | "Step 1 of 7.3" plus "the remaining steps of 7.3" skips the credential check for device-key lease grants when read literally, because 7.3 step 1 is 7.2 steps 1–4. | Runs the credential check for both profiles | Spell out the order: 7.2 step 1, 7.2 step 4, then 7.2 steps 5–8 or 7.3 steps 2–8 |
+| F-2 | 8.4 steps 1 and 4 | "Step 1 of 7.3" plus "the remaining steps of 7.3" skips the credential check for device-key lease grants when read literally, because 7.3 step 1 is 7.2 steps 1–4. | Runs the credential check for both profiles | **Resolved in aab-01**: order written out in 8.4 and 7.3 |
 | F-3 | 8.2 | The lease grantee (field `0x05`) is never checked when a lease is used, so any agent in the session can use it. | Checks it when the agent id is known (`E_LEASE_SCOPE`) | Add an explicit grantee check with an error code |
 | F-4 | 8.3 | A constraint whose `tool` names a tool that is not in the lease silently applies to nothing, so a typo fails open. | Rejects at grant (`E_VALUE`) | Require `tool` to name a tool in the lease |
 | F-5 | 9.3, 9.4 | There is no format for a signed checkpoint: how record, COSE_Sign1 and time-stamp token are bundled, the COSE headers, the allowed algorithms for the log key, how the auditor gets the key, which algorithm governs the chain head. | 7.5 algorithms minus RS256, `alg` in the protected header, digest reference as payload | Define all of these, or adopt C2SP signed notes (OI-12) |
@@ -56,13 +56,13 @@ Comments on any item: open an Issue with the "Companion spec (aab)" template and
 | :--- | :--- | :--- | :--- |
 | F-23 | 7.2 step 5 | clientDataJSON that is valid JSON but not an object has no error. | `E_JSON` |
 | F-24 | 7.2 step 6.1 | "Consistent with the AT and ED flags" does not say whether AT may be set in an assertion. | Rejects AT (`E_WA_AUTHDATA`) |
-| F-25 | 7.3, 7.5 | RS256 is not allowed for device-key, but no step rejects it; whether the −9/−7 and −19/−8 equivalence is symmetric is not stated. | Rejects at step 5 (`E_COSE`); symmetric |
+| F-25 | 7.3, 7.5 | RS256 is not allowed for device-key, but no step rejects it; whether the −9/−7 and −19/−8 equivalence is symmetric is not stated. | **Resolved in aab-01** (7.3 step 5): rejects at step 5 (`E_COSE`); symmetric |
 
 ## Lease (Section 8)
 
 | # | Section | Problem | Code today |
 | :--- | :--- | :--- | :--- |
-| F-26 | 8.4 step 4 | Which approver authorization a lease grant needs is not defined. | Grantor must be authorized for every tool in the lease |
+| F-26 | 8.4 step 4 | Which approver authorization a lease grant needs is not defined. | **Resolved in aab-01** (8.4 step 4): grantor must be authorized for every tool in the lease |
 | F-27 | 8.3 | Required members per `op` are implicit; pointer and value types are unchecked; a non-array `constraints` has no error. | `value` required except for `absent`; valid RFC 6901 pointer; `E_VALUE` |
 | F-28 | 8.3 `beneath` | Whether the root itself holds (`src` beneath `src`) is not stated. | Holds, per the letter of the rule |
 | F-29 | 8.1 | Order of entry decoding vs the sort and duplicate check is not given; the "proper prefix" sentence is vacuous because entries are self-delimiting. | Decodes first |
