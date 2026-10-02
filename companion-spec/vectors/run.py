@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Run every aab-00 test vector against the Python reference implementation.
+"""Run every aab-01 test vector against the Python reference implementation.
 
 Usage::
 
@@ -38,7 +38,7 @@ import sys
 import warnings
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SPEC = os.path.join(HERE, "..", "agent-action-binding-draft-00.md")
+SPEC = os.path.join(HERE, "..", "agent-action-binding-draft-01.md")
 sys.path.insert(0, os.path.join(HERE, "..", "reference", "python"))
 
 warnings.simplefilter("ignore", RuntimeWarning)

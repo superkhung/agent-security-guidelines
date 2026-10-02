@@ -36,7 +36,7 @@ from .errors import (
 # is not specified (e.g. a record with an out-of-order tag *and* a missing
 # field). We use framing -> missing -> values -> cross-field (module docstring).
 
-WIRE_VERSION = "00"
+WIRE_VERSION = "01"
 
 HASHES = {
     "sha-256": (hashlib.sha256, 32),
@@ -69,7 +69,7 @@ def domain_prefix(object_type: str, alg: str) -> bytes:
 
 
 def digest(object_type: str, body: bytes, alg: str = "sha-256") -> bytes:
-    """``H_alg(lp(utf8("aab/00/" + object_type + "/" + alg)) || body)``."""
+    """``H_alg(lp(utf8("aab/01/" + object_type + "/" + alg)) || body)``."""
     if object_type not in OBJECT_TYPES:
         raise ValueError("unknown object type %r" % object_type)
     if alg not in HASHES:

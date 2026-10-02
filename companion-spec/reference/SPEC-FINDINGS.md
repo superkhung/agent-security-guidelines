@@ -4,6 +4,8 @@ Writing `reference-python-1` turned up the places below where `aab-00` is ambigu
 
 Where the spec is silent, the code sometimes rejects more than the spec requires. No generated vector depends on those extra rejections.
 
+Items marked **resolved in aab-01** are fixed in [`agent-action-binding-draft-01.md`](../agent-action-binding-draft-01.md); Appendix A.2 of that draft lists each change. `aab-00` itself stays unchanged (git tag `aab-00`).
+
 Comments on any item: open an Issue with the "Companion spec (aab)" template and the item number, for example `[aab-00] F-3`.
 
 ## Design problems (fix before anything else)
@@ -95,3 +97,9 @@ Comments on any item: open an Issue with the "Companion spec (aab)" template and
 | F-36 | B.4 | WA-005 tests nothing unless the challenge contains `-` or `_` (the D.2 digest does); WA-028 and DK-006 need real signatures to be meaningful (both now carry the other format of a valid signature, so a lenient verifier accepts them and fails the vector). |
 | F-37 | B.1 | ENC-007 was printed as `{"a":1,"a":2}`, identical to ENC-005. Fixed in the spec as a typo (the escape `\u0061` had been lost). |
 | F-38 | Appendix D | "abab…ab" is ambiguous (it is `ab` × 32); the text calls the server identity a "record" although it is a sub-structure. |
+
+## Found while designing aab-01
+
+| # | Section | Problem | Resolution |
+| :--- | :--- | :--- | :--- |
+| F-46 | 7.1, 11 | Container `version` is a uint, `0` for `aab-00`, and Section 11 gives the frozen `aab-1` `version = 1`, which is also the number of draft `aab-01`. | **Resolved in aab-01**: `version` is the text label of the domain prefix (`"01"`; frozen `"1"`) |

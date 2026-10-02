@@ -4,7 +4,8 @@
 import unittest
 
 import context  # noqa: F401
-from aab import cbor
+from aab import cbor, evidence
+from aab.errors import AabError
 
 
 class Decode(unittest.TestCase):
@@ -39,6 +40,23 @@ class Decode(unittest.TestCase):
     def test_tag(self):
         v = cbor.decode(bytes.fromhex("d28440a0f640"), deterministic=False)
         self.assertEqual(v, cbor.Tag(18, [b"", {}, None, b""]))
+
+
+class Container(unittest.TestCase):
+    def container(self, version):
+        return cbor.encode({1: version, 2: "device-key", 3: b"x", 4: b"c", 9: b"s", 10: b"r"})
+
+    def code(self, data):
+        try:
+            evidence.decode_container(data)
+        except AabError as exc:
+            return exc.code
+        return None
+
+    def test_container_version(self):
+        self.assertEqual(self.code(self.container(0)), "E_CBOR")
+        self.assertEqual(self.code(self.container("00")), "E_CBOR")
+        self.assertIsNone(self.code(self.container("01")))
 
 
 if __name__ == "__main__":

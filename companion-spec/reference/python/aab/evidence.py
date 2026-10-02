@@ -30,12 +30,12 @@ from .errors import (
     E_WA_SIGNATURE,
     E_WA_TYPE,
 )
-from .records import DigestRef, decode_digest_ref, ref_of
+from .records import WIRE_VERSION, DigestRef, decode_digest_ref, ref_of
 
 WEBAUTHN, DEVICE_KEY = "webauthn", "device-key"
 
 # key -> (name, CBOR type)
-_KEYS = {1: int, 2: str, 3: bytes, 4: bytes, 5: bytes, 6: bytes, 7: bytes, 8: bytes, 9: bytes, 10: bytes}
+_KEYS = {1: str, 2: str, 3: bytes, 4: bytes, 5: bytes, 6: bytes, 7: bytes, 8: bytes, 9: bytes, 10: bytes}
 _COMMON = {1, 2, 3, 4, 10}
 _REQUIRED = {WEBAUTHN: _COMMON | {5, 6, 7}, DEVICE_KEY: _COMMON | {9}}
 _ALLOWED = {WEBAUTHN: _REQUIRED[WEBAUTHN] | {8}, DEVICE_KEY: _REQUIRED[DEVICE_KEY]}
@@ -92,8 +92,8 @@ def decode_container(data: bytes, expected_profile: Optional[str] = None) -> dic
         t = _KEYS[k]
         if not isinstance(v, t) or isinstance(v, bool):
             raise AabError(E_CBOR, "container key %d has the wrong type" % k)
-    if m.get(1) != 0:
-        raise AabError(E_CBOR, "version is not 0")
+    if m.get(1) != WIRE_VERSION:
+        raise AabError(E_CBOR, "version is not %r" % WIRE_VERSION)
     profile = m.get(2)
     if profile not in _REQUIRED:
         raise AabError(E_CBOR, "unknown profile %r" % (profile,))

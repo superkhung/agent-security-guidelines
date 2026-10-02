@@ -27,6 +27,11 @@ def raw(fields):
     return b"".join(encode_field(t, v) for t, v in fields)
 
 
+class WireVersion(unittest.TestCase):
+    def test_domain_prefix_is_aab_01(self):
+        self.assertEqual(records.domain_prefix("tool-fp", "sha-256"), lp(b"aab/01/tool-fp/sha-256"))
+
+
 class TaggedRecords(unittest.TestCase):
     def test_valid_checkpoint(self):
         d = log.decode_checkpoint(raw(CP))

@@ -22,7 +22,7 @@ import glob, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GUIDE = os.path.join(ROOT, "guideline", "agent-security-guidelines.md")
-SPEC = os.path.join(ROOT, "companion-spec", "agent-action-binding-draft-00.md")
+SPEC = os.path.join(ROOT, "companion-spec", "agent-action-binding-draft-01.md")
 
 LEVELS = ["ASAL-0", "ASAL-1", "ASAL-2", "ASAL-3a", "ASAL-3b"]
 FIELDS = ["Mục tiêu", "Chặn được", "Không chặn được", "Tổ chức cần có",
