@@ -394,11 +394,12 @@ Approval evidence is a CBOR map, encoded with the deterministic encoding rules o
 | `7` | signature | bstr | REQUIRED for `webauthn` |
 | `8` | userHandle | bstr | OPTIONAL, `webauthn` only |
 | `9` | COSE_Sign1 | bstr, a tagged COSE_Sign1 (RFC 9052) | REQUIRED for `device-key` |
-| `10` | record | bstr: the action record (Section 6.1) as tagged-record bytes | REQUIRED |
+| `10` | record | bstr: the action record (Section 6.1) or lease record (Section 8.1) as tagged-record bytes | REQUIRED |
+| `11` | object | tstr: `"action"` or `"lease"`, the object type of the record in key `10` | REQUIRED |
 
 Unknown keys, a missing required key, and a key that belongs to the other profile MUST be rejected with `E_CBOR` in `aab-01`.
 
-The same container carries a lease grant (Section 8.4), with key `10` holding the lease record (Section 8.1) and key `3` its digest reference.
+The same container carries an action approval (key `11` `"action"`, Section 7.2) and a lease grant (key `11` `"lease"`, Section 8.4). The verifier decodes key `10` as the record of that object type and computes the digest of key `3` with that object type's domain prefix (Section 4.5). An endpoint verifies one kind of operation; a container whose key `11` names the other object type, or any other value, MUST be rejected with `E_CBOR`.
 
 ### 7.2. Profile `webauthn`: verification steps
 
@@ -406,7 +407,7 @@ The verifier holds a registry of approver credentials: credential id, public key
 
 The verifier MUST perform all of the following, in this order, and reject on the first failure:
 
-1. **Container.** Decode the container (Section 7.1). Check `version = 0`, `profile = "webauthn"` and the key set. Else `E_CBOR`.
+1. **Container.** Decode the container (Section 7.1). Check `version = "01"`, `profile = "webauthn"`, the key set, and that `object` (key `11`) is `"action"`. Else `E_CBOR`.
 2. **Record.** Decode key `3` as a digest reference (Section 4.5; `E_ALG_MISMATCH`, `E_LENGTH`). Decode key `10` as an action record (Sections 4.2, 6.1; errors of Section 4). Compute the record's digest reference with the algorithm of key `3`. It MUST equal key `3` byte for byte. Else `E_DIGEST_MISMATCH`.
 3. **Record checks.** Run the checks of Section 6.4, in order.
 4. **Credential.** Look up key `4`. Unknown, revoked, or belonging to an approver not authorized for this action's class: `E_CREDENTIAL`. If the record has an approver id (`0x0A`), the credential MUST belong to that approver. Else `E_CREDENTIAL`.
@@ -546,7 +547,7 @@ All applicable constraints must hold (logical AND). A pointer that does not reso
 
 ### 8.4. Grant verification
 
-The grant evidence is the container of Section 7.1, with key `10` holding the lease record and key `3` its digest reference. The verifier MUST perform, in this order, and reject on the first failure:
+The grant evidence is the container of Section 7.1, with key `11` `"lease"`, key `10` holding the lease record and key `3` its digest reference. The verifier MUST perform, in this order, and reject on the first failure:
 
 1. Step 1 of Section 7.2 (or of Section 7.3 for `device-key`).
 2. Step 2 of Section 7.2, decoding key `10` as a lease record (Section 8.1). Else the errors of Section 4, or `E_DIGEST_MISMATCH`.
@@ -851,6 +852,7 @@ The findings are listed in `reference/SPEC-FINDINGS.md`; issues are in the repos
 
 | Finding | Change | Where |
 | :--- | :--- | :--- |
+| F-6 | Evidence container key `11` names the object type of key `10`; an endpoint rejects the other type | 7.1, 7.2, 8.4 |
 | F-7 | JSON fields inside records MUST already be canonical; new error `E_NOT_CANONICAL` | 4.3, 10 |
 | F-46 | Container `version` is the text label of the domain prefix (`"01"`), so draft and frozen versions cannot collide; domain prefix `aab/01/` | 4.5, 7.1, 9.2, 11 |
 
@@ -983,6 +985,8 @@ Vectors in this group include a test authenticator key pair so that runners can 
 | WA-027 | Credential registered with `alg = −8` on an Ed448 key | reject `E_WA_SIGNATURE` |
 | WA-028 | ES256 signature as raw `r ‖ s` instead of DER | reject `E_WA_SIGNATURE` |
 | WA-029 | Container without key `10` | reject `E_CBOR` |
+| WA-032 | Container with key `11` `"lease"` presented to the action endpoint | reject `E_CBOR` |
+| WA-033 | Container without key `11` | reject `E_CBOR` |
 | WA-034 | Container with `version` `"00"` | reject `E_CBOR` |
 
 ### B.5. DK · Device-key evidence

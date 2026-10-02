@@ -195,7 +195,7 @@ def container(rec, object_type="action", profile="webauthn", key3=None, cred_id=
     ``signer`` signs ``authenticatorData || SHA-256(clientDataJSON)`` (or of
     ``sign_cdj`` when given) unless ``sig`` is passed explicitly."""
     key3 = key3 if key3 is not None else ref_bytes(object_type, rec)
-    m = {1: records.WIRE_VERSION, 2: profile, 3: key3, 4: cred_id, 10: rec}
+    m = {1: records.WIRE_VERSION, 2: profile, 3: key3, 4: cred_id, 10: rec, 11: object_type}
     if profile == "webauthn":
         try:
             digest = records.decode_digest_ref(key3, "sha-256").digest
@@ -764,6 +764,10 @@ def gen_wa():
         note="Key 7 is the raw r || s form of a VALID es256 signature over the correct bytes (its DER form "
              "verifies), so a verifier that leniently accepts raw r || s would accept this vector.")
     vec("WA-029", "Container without key 10", "evidence", inp=ev(rec, drop=(10,)), ctx=ctx,
+        catalogue=reject("E_CBOR"), note=pre % "1", extra=extra)
+    vec("WA-032", "Container with object \"lease\" presented to the action endpoint", "evidence",
+        inp=ev(rec, extra={11: "lease"}), ctx=ctx, catalogue=reject("E_CBOR"), note=pre % "1", extra=extra)
+    vec("WA-033", "Container without key 11", "evidence", inp=ev(rec, drop=(11,)), ctx=ctx,
         catalogue=reject("E_CBOR"), note=pre % "1", extra=extra)
     vec("WA-034", "Container with version \"00\"", "evidence", inp=ev(rec, extra={1: "00"}), ctx=ctx,
         catalogue=reject("E_CBOR"), note=pre % "1", extra=extra)

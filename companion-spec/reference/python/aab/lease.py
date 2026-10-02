@@ -317,8 +317,8 @@ def check_lease_record(rec: dict, ctx: evidence.ApprovalContext, grants: GrantSt
 
 def verify_grant(data: bytes, ctx: evidence.ApprovalContext, grants: GrantState) -> dict:
     """Section 8.4. On success the lease id is recorded permanently."""
-    m = evidence.decode_container(data)                                   # step 1
-    ref, rec = evidence.bind_record(m, OBJECT_TYPE, decode, ctx.state.cfg)  # step 2
+    m = evidence.decode_container(data, OBJECT_TYPE)                      # step 1
+    ref, rec = evidence.bind_record(m, decode, ctx.state.cfg)             # step 2
     check_lease_record(rec, ctx, grants)                                  # step 3
     # SPEC-AMBIGUITY: 8.4 step 4 / 7.2 step 4: which action class a lease
     # grant needs is not defined. We require the grantor to be authorized

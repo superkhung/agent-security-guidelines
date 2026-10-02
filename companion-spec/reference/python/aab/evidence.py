@@ -35,8 +35,9 @@ from .records import WIRE_VERSION, DigestRef, decode_digest_ref, ref_of
 WEBAUTHN, DEVICE_KEY = "webauthn", "device-key"
 
 # key -> (name, CBOR type)
-_KEYS = {1: str, 2: str, 3: bytes, 4: bytes, 5: bytes, 6: bytes, 7: bytes, 8: bytes, 9: bytes, 10: bytes}
-_COMMON = {1, 2, 3, 4, 10}
+_KEYS = {1: str, 2: str, 3: bytes, 4: bytes, 5: bytes, 6: bytes, 7: bytes, 8: bytes, 9: bytes, 10: bytes, 11: str}
+_COMMON = {1, 2, 3, 4, 10, 11}
+OBJECTS = ("action", "lease")
 _REQUIRED = {WEBAUTHN: _COMMON | {5, 6, 7}, DEVICE_KEY: _COMMON | {9}}
 _ALLOWED = {WEBAUTHN: _REQUIRED[WEBAUTHN] | {8}, DEVICE_KEY: _REQUIRED[DEVICE_KEY]}
 
@@ -78,8 +79,12 @@ class ApprovalContext:
 # --- step 1: container -------------------------------------------------------
 
 
-def decode_container(data: bytes, expected_profile: Optional[str] = None) -> dict:
-    """Section 7.1 and step 1 of Section 7.2/7.3. All failures are E_CBOR."""
+def decode_container(data: bytes, expected_object: str, expected_profile: Optional[str] = None) -> dict:
+    """Section 7.1 and step 1 of Section 7.2/7.3. All failures are E_CBOR.
+
+    ``expected_object`` is the operation of the endpoint: ``"action"`` for an
+    action approval, ``"lease"`` for a lease grant (key 11).
+    """
     try:
         m = cbor.decode(data, deterministic=True)
     except cbor.CborError as exc:
@@ -104,18 +109,24 @@ def decode_container(data: bytes, expected_profile: Optional[str] = None) -> dic
         raise AabError(E_CBOR, "missing keys %s" % sorted(_REQUIRED[profile] - keys))
     if not keys <= _ALLOWED[profile]:
         raise AabError(E_CBOR, "keys %s not allowed for %s" % (sorted(keys - _ALLOWED[profile]), profile))
+    if m[11] not in OBJECTS:
+        raise AabError(E_CBOR, "unknown object type %r" % m[11])
+    if m[11] != expected_object:
+        raise AabError(E_CBOR, "object %r not accepted here (expected %r)" % (m[11], expected_object))
     return m
 
 
 # --- step 2: record ---------------------------------------------------------
 
 
-def bind_record(m: dict, object_type: str, decoder, cfg):
-    """Step 2 of Section 7.2: key 3 as digest ref, key 10 decoded, digests equal."""
-    # SPEC-AMBIGUITY: 7.1/8.4: the container does not say whether key 10 is an
-    # action or a lease record; the verifier must know from context which one
-    # it expects. We take `object_type` from the caller (the endpoint).
-    ref =decode_digest_ref(m[3], cfg.alg(object_type))
+def bind_record(m: dict, decoder, cfg):
+    """Step 2 of Section 7.2: key 3 as digest ref, key 10 decoded, digests equal.
+
+    The object type is key 11, already checked against the endpoint by
+    :func:`decode_container`.
+    """
+    object_type = m[11]
+    ref = decode_digest_ref(m[3], cfg.alg(object_type))
     rec = decoder(m[10], cfg)
     if ref_of(object_type, m[10], ref.alg).encode() != m[3]:
         raise AabError(E_DIGEST_MISMATCH, "record digest differs from key 3")
@@ -286,9 +297,9 @@ def device_key_tail(ctx: ApprovalContext, m: dict, cred: Credential) -> None:
 
 def verify_action(data: bytes, ctx: ApprovalContext) -> dict:
     """Verify approval evidence for one action; consume its pending entry on success."""
-    m = decode_container(data)                                   # step 1
+    m = decode_container(data, "action")                         # step 1
     state = ctx.state
-    ref, rec = bind_record(m, "action", action_mod.decode, state.cfg)  # step 2
+    ref, rec = bind_record(m, action_mod.decode, state.cfg)      # step 2
     action_mod.check_record(rec, state, m[3])                    # step 3
     cred = lookup_credential(ctx, m[4], [ctx.tool_classes.get(rec["name"])],
                              rec.get("approver"))                # step 4

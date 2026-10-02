@@ -43,12 +43,14 @@ class Decode(unittest.TestCase):
 
 
 class Container(unittest.TestCase):
-    def container(self, version):
-        return cbor.encode({1: version, 2: "device-key", 3: b"x", 4: b"c", 9: b"s", 10: b"r"})
+    def container(self, version="01", **over):
+        m = {1: version, 2: "device-key", 3: b"x", 4: b"c", 9: b"s", 10: b"r", 11: "action"}
+        m.update(over)
+        return cbor.encode({k: v for k, v in m.items() if v is not None})
 
-    def code(self, data):
+    def code(self, data, expected_object="action"):
         try:
-            evidence.decode_container(data)
+            evidence.decode_container(data, expected_object)
         except AabError as exc:
             return exc.code
         return None
@@ -57,6 +59,22 @@ class Container(unittest.TestCase):
         self.assertEqual(self.code(self.container(0)), "E_CBOR")
         self.assertEqual(self.code(self.container("00")), "E_CBOR")
         self.assertIsNone(self.code(self.container("01")))
+
+    def test_object_key_required(self):
+        self.assertEqual(self.code(cbor.encode({1: "01", 2: "device-key", 3: b"x", 4: b"c", 9: b"s", 10: b"r"})),
+                         "E_CBOR")
+
+    def test_object_key_mismatch(self):
+        self.assertEqual(self.code(self.container(), expected_object="lease"), "E_CBOR")
+        self.assertIsNone(self.code(self.container(), "action"))
+
+    def test_object_key_wrong_type(self):
+        data = cbor.encode({1: "01", 2: "device-key", 3: b"x", 4: b"c", 9: b"s", 10: b"r", 11: 1})
+        self.assertEqual(self.code(data), "E_CBOR")
+
+    def test_object_key_unknown_value(self):
+        data = cbor.encode({1: "01", 2: "device-key", 3: b"x", 4: b"c", 9: b"s", 10: b"r", 11: "checkpoint"})
+        self.assertEqual(self.code(data, expected_object="checkpoint"), "E_CBOR")
 
 
 if __name__ == "__main__":
