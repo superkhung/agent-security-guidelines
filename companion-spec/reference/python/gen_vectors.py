@@ -439,6 +439,9 @@ def gen_enc():
     sid = SID_D1_OBJ.encode()
     vec("ENC-030", "Server identity whose lp() values leave 2 bytes unused", "server-identity",
         inp={"identity_hex": (sid + b"\x00\x00").hex()}, catalogue=reject("E_LENGTH"))
+    rec31 = build_action(args_bytes=b'{"path": "src/main.py"}')
+    vec("ENC-031", "Action record whose arguments field is valid JSON but not canonical", "record",
+        inp={"record_type": "action", "record_hex": rec31.hex()}, catalogue=reject("E_NOT_CANONICAL"))
 
 
 # --- FP ------------------------------------------------------------------------
@@ -517,6 +520,9 @@ def gen_fp():
         inp={"kind": "url", "id": "https://mcp.example/?b=2&a=1"}, catalogue=reject("E_VALUE"))
     vec("FP-019", "url identity with scheme http", "server-identity",
         inp={"kind": "url", "id": "http://mcp.example/"}, catalogue=reject("E_VALUE"))
+    fp20 = records.encode_record([(0x01, SID_D1_OBJ.encode()), (0x02, b"read_file"), (0x05, b'{"type": "object"}')])
+    vec("FP-020", "Tool fingerprint record whose inputSchema field is not canonical", "record",
+        inp={"record_type": "tool-fp", "record_hex": fp20.hex()}, catalogue=reject("E_NOT_CANONICAL"))
 
 
 # --- ACT -----------------------------------------------------------------------

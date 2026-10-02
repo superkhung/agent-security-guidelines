@@ -1,0 +1,18 @@
+{
+  "id": "FP-020",
+  "group": "FP",
+  "required_minimum": false,
+  "description": "Tool fingerprint record whose inputSchema field is not canonical",
+  "object": "record",
+  "alg": "sha-256",
+  "input": {
+    "record_type": "tool-fp",
+    "record_hex": "000100000076000000036f63690000006b72656769737472792e6578616d706c652e696e7465726e616c2f6d63702f66696c6573407368613235363a61626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162000200000009726561645f66696c650005000000127b2274797065223a20226f626a656374227d"
+  },
+  "expected": {
+    "status": "provisional",
+    "source": "reference-python-1",
+    "result": "reject",
+    "error": "E_NOT_CANONICAL"
+  }
+}

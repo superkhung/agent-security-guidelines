@@ -207,6 +207,8 @@ JCS sorts member names by their UTF-16 code units (RFC 8785 §3.2.3), not by cod
 
 Parsers MUST detect duplicate keys themselves. Many JSON libraries silently keep the first or last value, which is the parser differential that NET-05 in the guideline warns about.
 
+**JSON inside a record.** A field whose value is `jcs(v)` (tool fingerprint `0x05`, `0x06` and `0x07`, action `0x07`, lease `0x07`) MUST be in canonical form already. A consumer decoding such a field MUST parse it with the rules above and MUST reject it with `E_NOT_CANONICAL` if its bytes differ from `jcs()` of the parsed value. The errors of the table above are reported first. The forwarding rule (Section 6.3) relies on this: the bytes forwarded as `params.arguments` are the bytes of field `0x07`, so they must be the canonical form that was hashed.
+
 ### 4.4. Integers and times
 
 - Counters and sizes are `u64`.
@@ -678,6 +680,7 @@ Result: the auditor reports `verified up to index k`, plus the list of unanchore
 | `E_DUP_KEY` | Duplicate JSON member name | 4.3, 6.3, 7.2 |
 | `E_NUMBER` | JSON number whose value changes under RFC 8785 serialization, or that overflows binary64 | 4.3 |
 | `E_JSON` | Invalid JSON, or `arguments` not an object | 4.3, 6.1 |
+| `E_NOT_CANONICAL` | JSON field inside a record not in RFC 8785 canonical form | 4.3, 5.1, 6.1, 8.1 |
 | `E_ALG_MISMATCH` | Digest algorithm unknown, or not the expected one | 4.5, 7.2 |
 | `E_FP_CHANGED` | Tool fingerprint differs from approved | 5.4, 6.4, 8.2, 8.4 |
 | `E_REPLAY` | No unconsumed pending entry for the action, or lease id already granted | 6.2, 6.4, 8.4 |
@@ -848,6 +851,7 @@ The findings are listed in `reference/SPEC-FINDINGS.md`; issues are in the repos
 
 | Finding | Change | Where |
 | :--- | :--- | :--- |
+| F-7 | JSON fields inside records MUST already be canonical; new error `E_NOT_CANONICAL` | 4.3, 10 |
 | F-46 | Container `version` is the text label of the domain prefix (`"01"`), so draft and frozen versions cannot collide; domain prefix `aab/01/` | 4.5, 7.1, 9.2, 11 |
 
 ---
@@ -890,6 +894,7 @@ The findings are listed in `reference/SPEC-FINDINGS.md`; issues are in the repos
 | ENC-028 | Action record without tag `0x03` | reject `E_MISSING_FIELD` |
 | ENC-029 | JSON text `{"a":NaN}` | reject `E_JSON` |
 | ENC-030 | Server identity whose `lp()` values leave 2 bytes of the field value unused | reject `E_LENGTH` |
+| ENC-031 | Action record whose field `0x07` is `{"path": "src/main.py"}` (valid JSON, not canonical) | reject `E_NOT_CANONICAL` |
 
 ### B.2. FP · Tool fingerprint
 
@@ -914,6 +919,7 @@ The findings are listed in `reference/SPEC-FINDINGS.md`; issues are in the repos
 | FP-017 | `url` identity `https://user:pass@mcp.example/` | reject `E_VALUE` |
 | FP-018 | `url` identity with a query, `https://mcp.example/?b=2&a=1` | reject `E_VALUE` |
 | FP-019 | `url` identity with scheme `http` | reject `E_VALUE` |
+| FP-020 | Tool fingerprint record whose `inputSchema` field is `{"type": "object"}` (not canonical) | reject `E_NOT_CANONICAL` |
 
 ### B.3. ACT · Action request digest
 

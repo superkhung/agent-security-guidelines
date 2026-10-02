@@ -18,7 +18,7 @@ Comments on any item: open an Issue with the "Companion spec (aab)" template and
 | F-4 | 8.3 | A constraint whose `tool` names a tool that is not in the lease silently applies to nothing, so a typo fails open. | Rejects at grant (`E_VALUE`) | Require `tool` to name a tool in the lease |
 | F-5 | 9.3, 9.4 | There is no format for a signed checkpoint: how record, COSE_Sign1 and time-stamp token are bundled, the COSE headers, the allowed algorithms for the log key, how the auditor gets the key, which algorithm governs the chain head. | 7.5 algorithms minus RS256, `alg` in the protected header, digest reference as payload | Define all of these, or adopt C2SP signed notes (OI-12) |
 | F-6 | 7.1, 8.4 | The evidence container does not say whether key `10` holds an action or a lease record; the verifier must know from context. | Endpoint decides | Add a container key for the object type, or state that the endpoint decides |
-| F-7 | 4.2, 4.3, 6.3 | Nothing requires a consumer to check that JSON fields inside a record are already in canonical form, although the forwarding rule depends on it. | Requires canonical form, rejects with `E_JSON` | Make it a MUST with an error code |
+| F-7 | 4.2, 4.3, 6.3 | Nothing requires a consumer to check that JSON fields inside a record are already in canonical form, although the forwarding rule depends on it. | Requires canonical form, rejects with `E_NOT_CANONICAL` | **Resolved in aab-01**: MUST, error `E_NOT_CANONICAL` (4.3) |
 
 ## Encoding (Section 4)
 
