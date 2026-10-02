@@ -925,6 +925,9 @@ def gen_ls():
           note="The lease grantee is agent-1; agent-2 is in the same session (finding F-3).")
     grant("LS-027", "Grantee is not an agent of the session", build_lease(), reject("E_LEASE_SCOPE"),
           ctx_over={"session_agents": {SESSION.hex(): ["agent-2"]}})
+    grant("LS-026", "Constraint whose tool is not in the lease tool set",
+          build_lease(constraints=[{"tool": "delete_file", "pointer": "/path", "op": "beneath", "value": "src"}]),
+          reject("E_VALUE"))
     l24 = build_lease(grantor="bob@example.internal")
     r24 = ref_bytes("lease", l24)
     vec("LS-024", "Device-key grant signed with a credential that does not belong to the grantor", "lease-grant",

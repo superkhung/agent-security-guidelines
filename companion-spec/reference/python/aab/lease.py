@@ -196,8 +196,7 @@ def validate_constraints(constraints, tool_names: Set[str]) -> None:
         if "tool" in c:
             if not isinstance(c["tool"], str):
                 raise AabError(E_VALUE, "tool is not a string")
-            # SPEC-AMBIGUITY: 8.3: a `tool` naming no tool in the lease makes the
-            # constraint silently inert (fail-open on a typo). We reject it.
+            # Section 8.3: `tool` must name a tool in the lease.
             if c["tool"] not in tool_names:
                 raise AabError(E_VALUE, "constraint names a tool not in the lease")
         v = c.get("value")

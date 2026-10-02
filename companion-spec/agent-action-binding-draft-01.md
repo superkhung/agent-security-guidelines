@@ -540,7 +540,7 @@ A call that fails check 3, 5 or 6 is not covered by the lease. The error is logg
 { "tool": "write_file", "pointer": "/path", "op": "beneath", "value": "src" }
 ```
 
-`tool` is OPTIONAL. When present, it is a tool name, and the constraint applies only to calls to tools with that name in the lease tool set. When absent, the constraint applies to calls to every tool in the lease.
+`tool` is OPTIONAL. When present, it MUST be the name of a tool in the lease tool set, and the constraint applies only to calls to tools with that name. A `tool` that names no tool in the lease would make the constraint apply to nothing, so a typo would silently remove a restriction; such a lease MUST be rejected at grant with `E_VALUE`. When `tool` is absent, the constraint applies to calls to every tool in the lease.
 
 | `op` | Meaning |
 | :--- | :--- |
@@ -873,6 +873,7 @@ The findings are listed in `reference/SPEC-FINDINGS.md`; issues are in the repos
 | F-1 | Signature counter compared with the snapshot at the record's `not_before`, within one atomic step with the pending entry; `not_before` is the pending entry's creation time | 6.1, 6.2, 6.4, 7.2, 8.4, 13.4, 13.5 |
 | F-2 | Grant verification order written out step by step; the credential check runs for both profiles | 7.3, 8.4 |
 | F-3 | Lease grantee checked at grant (an agent of the session) and on every call; a session may have several agents | 2.4, 8.2, 8.4 |
+| F-4 | A constraint's `tool` must name a tool in the lease, else `E_VALUE` at grant | 8.3 |
 | F-6 | Evidence container key `11` names the object type of key `10`; an endpoint rejects the other type | 7.1, 7.2, 8.4 |
 | F-25 | Device-key: RS256 rejected at step 5; algorithm equivalences hold in both directions | 7.3 |
 | F-26 | A lease grant needs the grantor to be authorized for every tool in the lease | 8.4 |
@@ -1055,6 +1056,7 @@ Vectors in this group include a test authenticator key pair so that runners can 
 | LS-023 | `beneath` constraint with `value` `../src` | reject at grant `E_VALUE` |
 | LS-024 | `device-key` grant whose credential does not belong to the grantor | reject at grant `E_CREDENTIAL` |
 | LS-025 | Call by an agent of the session that is not the grantee | reject `E_LEASE_SCOPE` |
+| LS-026 | Constraint whose `tool` is not in the lease tool set | reject at grant `E_VALUE` |
 | LS-027 | Grant whose grantee is not an agent of the session | reject at grant `E_LEASE_SCOPE` |
 
 ### B.7. LOG · Log chain
