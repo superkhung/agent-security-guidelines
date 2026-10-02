@@ -16,11 +16,11 @@ TOOLS.md          Bản sống của bảng công cụ ở Mục 5.1; khi lệch
 playbooks/        Playbook sự cố, break-glass và kịch bản diễn tập cho OBS-06
 checks/           asal: chạy phép kiểm chứng tự động và báo cáo tư thế agent cho cả tổ chức
 examples/         Cấu hình mẫu đã kiểm thử: devcontainer có proxy allowlist, cấu hình srt, settings của Claude Code
-companion-spec/   Agent Action Binding: Wire Format and Test Vectors (tiếng Anh, bản nháp aab-00)
+companion-spec/   Agent Action Binding: Wire Format and Test Vectors (tiếng Anh, bản nháp aab-01)
 pdf/              Công cụ xuất PDF
 ```
 
-`companion-spec/` là đặc tả wire format và test vectors cho SC-05, ACT-04, ACT-06 và OBS-02. Bản `aab-00` **chưa dùng để cài đặt được**. Đã có bản cài đặt tham chiếu đầu tiên (Python) và file test vector trong `companion-spec/reference/` và `companion-spec/vectors/`; mọi giá trị kỳ vọng còn là tạm thời cho tới khi có bản cài đặt độc lập thứ hai. Xem Phụ lục E của guideline.
+`companion-spec/` là đặc tả wire format và test vectors cho SC-05, ACT-04, ACT-06 và OBS-02. Bản nháp hiện tại là `aab-01`, sửa các lỗi thiết kế mà bản cài đặt tham chiếu đầu tiên tìm ra trong `aab-00`. `aab-00` được giữ ở git tag `aab-00`. Cả hai bản đều **chưa dùng để cài đặt được**. Đã có bản cài đặt tham chiếu đầu tiên (Python) và file test vector trong `companion-spec/reference/` và `companion-spec/vectors/`; mọi giá trị kỳ vọng còn là tạm thời cho tới khi có bản cài đặt độc lập thứ hai. Xem Phụ lục E của guideline.
 
 ## Bắt đầu từ đâu
 

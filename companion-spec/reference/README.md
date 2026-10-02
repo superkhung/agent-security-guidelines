@@ -1,8 +1,11 @@
-# aab-00 reference implementation (Python)
+# aab-01 reference implementation (Python)
 
 This directory holds **one** implementation of the draft
-[Agent Action Binding: Wire Format and Test Vectors](../agent-action-binding-draft-00.md)
-(`aab-00`), and the generator of the test vector files in [`../vectors/`](../vectors/).
+[Agent Action Binding: Wire Format and Test Vectors](../agent-action-binding-draft-01.md)
+(`aab-01`), and the generator of the test vector files in [`../vectors/`](../vectors/).
+The `aab-00` draft, its vectors and this implementation as it was for `aab-00` are kept at git
+tag `aab-00`; `aab-01` digests differ from `aab-00` ones because the wire version is part of
+every domain prefix.
 
 > **This is one implementation, by one author.** Section 12.3 of the spec requires a second,
 > independent implementation (different author, preferably a different language and different
@@ -20,11 +23,11 @@ Python 3.10 or newer. The core is standard library only. An optional signature b
 imports, and nothing else depends on it.
 
 ```sh
-# Standard library only: 122 vectors decided, 25 need the backend (not decided), 2 pending.
+# Standard library only: 137 vectors decided, 27 need the backend (not decided), 2 pending.
 python3 -m unittest discover -s companion-spec/reference/python/tests
 python3 companion-spec/vectors/run.py
 
-# With the signature backend: 147 decided, 2 pending.
+# With the signature backend: 164 decided, 2 pending.
 python3 -m venv .venv && .venv/bin/pip install cryptography==50.0.1
 .venv/bin/python -m unittest discover -s companion-spec/reference/python/tests
 .venv/bin/python companion-spec/vectors/run.py
@@ -66,7 +69,7 @@ warning because the Unicode pin cannot be honoured (see below). Use a Python who
 | Algorithm and key checks, strict DER, pluggable signature backend, backend selection | 7.5 | `aab/sigs.py` |
 | Optional backend: ES256/ESP256 (DER and raw `r || s`), EdDSA/Ed25519 (-8, -19), RS256 where allowed | 7.5 | `aab/crypto_cryptography.py` |
 | Lease record, tool entries, constraints (`beneath` included), grant checks, enforcement | 8 | `aab/lease.py` |
-| Log records, chain, log writer, checkpoints and their COSE_Sign1 signatures, auditor | 9 | `aab/log.py` |
+| Log records, chain, log writer, checkpoints, signed checkpoint bundles, auditor and its trust configuration | 9 | `aab/log.py` |
 | Minimal proxy tying Sections 5-7 and 9 together (end-to-end vectors) | B.8 | `aab/proxy.py` |
 | Execution of one vector file | 12.2 | `aab/vectorexec.py` |
 
@@ -77,15 +80,15 @@ record, the domain prefix and the D.2 action digest); see `tests/test_appendix_d
 
 | Group | Files | Decided without backend | Need the backend | Decided with backend | Pending |
 | :--- | ---: | ---: | ---: | ---: | ---: |
-| ENC | 30 | 30 | 0 | 30 | 0 |
-| FP | 19 | 18 | 0 | 18 | 1 (FP-016) |
+| ENC | 31 | 31 | 0 | 31 | 0 |
+| FP | 20 | 19 | 0 | 19 | 1 (FP-016) |
 | ACT | 20 | 18 | 2 | 20 | 0 |
-| WA | 29 | 22 | 7 | 29 | 0 |
+| WA | 34 | 25 | 9 | 34 | 0 |
 | DK | 7 | 5 | 2 | 7 | 0 |
-| LS | 23 | 23 | 0 | 23 | 0 |
-| LOG | 18 | 6 | 11 | 17 | 1 (LOG-017) |
+| LS | 27 | 27 | 0 | 27 | 0 |
+| LOG | 24 | 12 | 11 | 23 | 1 (LOG-017) |
 | E2E | 3 | 0 | 3 | 3 | 0 |
-| **Total** | **149** | **122** | **25** | **147** | **2** |
+| **Total** | **166** | **137** | **27** | **164** | **2** |
 
 "Decided" means the file carries a provisional expected value and this implementation matches it.
 
